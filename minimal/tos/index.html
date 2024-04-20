@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Minimal</title>
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/4.0.0/github-markdown.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+
+    .container {
+      width: 80%;
+      margin: auto;
+      overflow: hidden;
+      padding: 0 20px;
+    }
+
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 85px 45px;
+    }
+
+    @media (max-width: 767px) {
+      .container {
+        width: 95%;
+        padding: 0 20px;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/showdown@1.9.1/dist/showdown.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function (event) {
+      var text = `
+# Terms of Service for Minimal
+
+**Effective Date: April 19, 2024**
+
+## 1. Acceptance of Terms
+By accessing or using Minimal, a mobile application developed and maintained by ByteBrew App Studios, you agree to comply with and be bound by these Terms of Service. If you do not agree with any part of these terms, you are prohibited from using or accessing this app.
+
+## 2. Privacy Policy
+Our Privacy Policy, which outlines our practices concerning the handling of your personal information, is incorporated herein by reference. Please review the policy [here](./privacy).
+
+## 3. Use License
+Permission is granted to download one copy of Minimal per device for personal, non-commercial use only. This license does not allow you to:
+- Modify or copy the materials;
+- Use the materials for any commercial purpose, or for any public display;
+- Attempt to reverse engineer any software contained in Minimal;
+- Transfer the materials to another person or "mirror" the materials on any other server.
+This license shall automatically terminate if you violate any of these restrictions and may be terminated by ByteBrew App Studios at any time.
+
+## 4. In-app Purchases
+Minimal offers a one-time in-app purchase that unlocks additional features within the app for a lifetime. All transactions are processed through the platform's respective app store (e.g., Apple App Store, Google Play).
+
+## 5. Refunds
+Digital in-app purchases are generally non-refundable. Refunds are processed according to the app store’s policies where the app was purchased. Please refer to the respective store’s refund policies for further information.
+
+## 6. Modifications to the Service and Prices
+ByteBrew App Studios reserves the right to modify or discontinue, temporarily or permanently, the Service (or any part thereof) with or without notice at any time.
+
+## 7. Disclaimer
+The materials within Minimal are provided on an 'as is' basis. ByteBrew App Studios makes no warranties, expressed or implied, and hereby disclaims all other warranties including, without limitation, implied warranties of merchantability, fitness for a particular purpose, or non-infringement of intellectual property.
+
+## 8. Limitation of Liability
+In no event shall ByteBrew App Studios or its suppliers be liable for any consequential damages arising out of the use or inability to use Minimal, even if ByteBrew App Studios or an authorized representative has been notified orally or in writing of the possibility of such damage.
+
+## 9. Changes to Terms of Service
+We reserve the right, at our sole discretion, to modify or replace these Terms at any time. Changes will be effective immediately upon posting on this page.
+
+## 10. Contact Us
+If you have any questions about these Terms, please contact us at [info@bytebrew.xyz](mailto:info@bytebrew.xyz).
+
+      `
+      var converter = new showdown.Converter(),
+        text = text,
+        html = converter.makeHtml(text);
+      document.getElementById("markdown").innerHTML = html;
+    });
+  </script>
+  <script>
+    window.history.pushState({}, '', '/minimal/tos');
+  </script>
+</head>
+
+<body>
+  <div class="container markdown-body" id="markdown">
+    <!-- Markdown converted content will be loaded here -->
+  </div>
+</body>
+
+</html>

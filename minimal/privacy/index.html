@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Minimal</title>
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/4.0.0/github-markdown.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      color: #333;
+    }
+
+    .container {
+      width: 80%;
+      margin: auto;
+      overflow: hidden;
+      padding: 0 20px;
+    }
+
+    .markdown-body {
+      box-sizing: border-box;
+      min-width: 200px;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 85px 45px;
+    }
+
+    @media (max-width: 767px) {
+      .container {
+        width: 95%;
+        padding: 0 20px;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/showdown@1.9.1/dist/showdown.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function (event) {
+      var text = `
+# Privacy Policy for Minimal
+
+**Effective Date: April 19, 2024**
+
+## 1. Introduction
+Welcome to Minimal! At ByteBrew App Studios, we are committed to protecting your privacy and ensuring you have a positive experience with our app. This Privacy Policy outlines our practices regarding the collection, use, and disclosure of information we receive through Minimal.
+
+## 2. Information Collection
+Minimal collects anonymous analytics data to help improve the app's functionality and user experience. No personally identifying information is collected. The types of information collected include:
+
+- App usage data (e.g., frequency and duration of app usage)
+- Interaction data (e.g., features used within the app)
+- Device type and technical information (e.g., operating system version, device model)
+
+## 3. Use of Information
+The information we collect is used solely for the purposes of analyzing and enhancing the app’s performance and usability. For example, analytics help us understand which features are most popular and where users might encounter issues.
+
+## 4. Sharing of Information
+We do not share any information we collect from you with third parties, except as required to provide and improve app functionalities, as mandated by law, or as part of a business transfer.
+
+## 5. Data Retention
+We retain the collected information for as long as necessary to provide you with your requested service. What data we store, we’ll protect within commercially acceptable means to prevent loss and theft, as well as unauthorized access, disclosure, copying, use, or modification.
+
+## 6. Your Rights
+You have the right to opt out of data collection by disabling analytics in the app settings. Please note that opting out of analytics may affect your experience using the app.
+
+## 7. Changes to This Privacy Policy
+We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page. We encourage you to review this Privacy Policy periodically for any changes.
+
+## 8. Contact Us
+If you have any questions or suggestions about our Privacy Policy, please contact us at [info@bytebrew.xyz](mailto:info@bytebrew.xyz).
+      `
+      var converter = new showdown.Converter(),
+        text = text,
+        html = converter.makeHtml(text);
+      document.getElementById("markdown").innerHTML = html;
+    });
+  </script>
+  <script>
+    window.history.pushState({}, '', '/minimal/privacy');
+  </script>
+</head>
+
+<body>
+  <div class="container markdown-body" id="markdown">
+    <!-- Markdown converted content will be loaded here -->
+  </div>
+</body>
+
+</html>
