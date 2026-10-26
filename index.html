@@ -60,6 +60,7 @@
     .spacer { height: 11px; }
 
     main {
+      position: relative;
       display: flex;
       justify-content: center;
       perspective: 1000px;
@@ -165,16 +166,23 @@
       color: #8C8C91;
     }
 
+    /* Sits on its own just below the card; positioned so the card doesn't move when it appears. */
     .tilt-btn {
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 28px);
+      transform: translateX(-50%);
+      white-space: nowrap;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
       min-height: 44px;
       padding: 0 16px;
       background: transparent;
       border: 1px solid #3A3A3E;
       border-radius: 22px;
       color: #A9A7A2;
-      font: inherit;
-      letter-spacing: inherit;
-      text-transform: inherit;
+      font-family: inherit;
       cursor: pointer;
     }
 
@@ -203,11 +211,11 @@
         <span data-label="2">Studios</span>
       </div>
     </div>
+    <button type="button" class="tilt-btn" id="tilt-btn" hidden>Enable tilt</button>
   </main>
 
   <footer>
     <a href="mailto:info@bytebrew.xyz">info@bytebrew.xyz</a>
-    <button type="button" class="tilt-btn" id="tilt-btn" hidden>Enable tilt</button>
     <span>&copy; <span id="year">2026</span> ByteBrew LLC</span>
   </footer>
 
