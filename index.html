@@ -244,10 +244,22 @@
         if (e.pointerType === 'mouse' && !canHover) return;
         setPointer(e);
       }, { passive: true });
+      var touching = false;
+      var lastType = 'mouse';
       window.addEventListener('pointerdown', function (e) {
+        lastType = e.pointerType;
         if (e.target.closest && e.target.closest('a, button')) return;
+        if (e.pointerType !== 'mouse') touching = true;
         setPointer(e);
       }, { passive: true });
+      function release(e) {
+        if (e.pointerType !== 'mouse') {
+          touching = false;
+          lastPointer = performance.now();
+        }
+      }
+      window.addEventListener('pointerup', release, { passive: true });
+      window.addEventListener('pointercancel', release, { passive: true });
 
       window.addEventListener('deviceorientation', function (e) {
         if (e.gamma == null || e.beta == null) return;
@@ -320,12 +332,19 @@
       }
 
       function tick(now) {
-        // With no input at all, drift gently so the card never looks frozen.
-        if (!reduced && !hasTilt && now - lastPointer > 2500) {
+        var k = reduced ? 0.2 : 0.09;
+        var touchMode = !canHover || lastType !== 'mouse';
+        if (touchMode && !touching && now - lastPointer > 3000 && (hasTilt || reduced)) {
+          // On phones, a few seconds after the finger lifts, ease the card back to flat
+          // so phone tilt reads cleanly again.
+          pointer.x = 0;
+          pointer.y = 0;
+          k = 0.05;
+        } else if (!reduced && !hasTilt && !touching && now - lastPointer > 2500) {
+          // With no input at all, drift gently so the card never looks frozen.
           pointer.x = Math.sin(now * 0.00028) * 0.9;
           pointer.y = Math.sin(now * 0.00023 + 1) * 0.6;
         }
-        var k = reduced ? 0.2 : 0.09;
         cardPose.x += (pointer.x - cardPose.x) * k;
         cardPose.y += (pointer.y - cardPose.y) * k;
         var tx = hasTilt ? tilt.x : 0, ty = hasTilt ? tilt.y : 0;
