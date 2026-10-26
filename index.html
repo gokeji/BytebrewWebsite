@@ -216,7 +216,7 @@
       document.getElementById('year').textContent = new Date().getFullYear();
 
       var TILT = 20;      // max card tilt in degrees (mouse / tap)
-      var SNAP = 2.6;     // how quickly each word snaps in
+      var SNAP = 1.4;     // lower = more blending between words (a real lenticular is rarely a clean single image)
       var PERIOD = 9;     // lenticular strip width in px
 
       var card = document.getElementById('card');
@@ -292,6 +292,28 @@
       // Quarter turns: once the phone is rotated well past 90 degrees, the card turns to stay upright.
       var snapAngle = 0;
       var turn = { a: 0, v: 0 };
+
+      // Shake wobble: the card rocks around its own vertical axis, as if about to flip over.
+      var wob = { y: 0, vy: 0, x: 0, vx: 0 };
+      var gPrev = null;
+      window.addEventListener('devicemotion', function (e) {
+        if (reduced) return;
+        var ax, ay, az, a = e.acceleration;
+        if (a && a.x != null) { ax = a.x; ay = a.y; az = a.z || 0; }
+        else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) {
+          var g = e.accelerationIncludingGravity;
+          if (!gPrev) gPrev = { x: g.x, y: g.y, z: g.z || 0 };
+          gPrev.x += (g.x - gPrev.x) * 0.1; gPrev.y += (g.y - gPrev.y) * 0.1; gPrev.z += ((g.z || 0) - gPrev.z) * 0.1;
+          ax = g.x - gPrev.x; ay = g.y - gPrev.y; az = (g.z || 0) - gPrev.z;
+        } else return;
+        if (Math.sqrt(ax * ax + ay * ay + az * az) < 3) return;   // ignore ordinary handling
+        var dt = clamp(e.interval ? (e.interval > 1 ? e.interval / 1000 : e.interval) : 0.016, 0.004, 0.1);
+        // Side-to-side shakes rock it around its vertical axis; in/out and up/down add a little nod.
+        var c = Math.round(Math.cos(snapAngle * DEG)), sn = Math.round(Math.sin(snapAngle * DEG));
+        var cxA = ax * c - ay * sn;
+        wob.vy = clamp(wob.vy - cxA * 420 * dt, -1000, 1000);
+        wob.vx = clamp(wob.vx + az * 90 * dt, -400, 400);
+      });
       window.addEventListener('pointermove', function (e) {
         if (e.pointerType === 'mouse' && !canHover) return;
         setPointer(e);
@@ -344,6 +366,8 @@
       if (DOE && typeof DOE.requestPermission === 'function' && 'ontouchstart' in window) {
         setTimeout(function () { if (!hasTilt) btn.hidden = false; }, 1200);
         btn.addEventListener('click', function () {
+          var DME = window.DeviceMotionEvent;
+          if (DME && typeof DME.requestPermission === 'function') DME.requestPermission().catch(function () {});
           DOE.requestPermission().then(function (res) {
             if (res === 'granted') btn.hidden = true;
           }).catch(function () {});
@@ -359,12 +383,12 @@
           'translate3d(0,' + (cardPose.y * 28).toFixed(1) + 'px,0) ' +
           'rotateZ(' + turn.a.toFixed(2) + 'deg) ' +
           'rotateX(' + lift.toFixed(2) + 'deg) ' +
-          'rotateY(' + (cx * TILT).toFixed(2) + 'deg) ' +
-          'rotateX(' + (-cy * TILT * 1.25).toFixed(2) + 'deg)';
+          'rotateY(' + (cx * TILT + wob.y).toFixed(2) + 'deg) ' +
+          'rotateX(' + (-cy * TILT * 1.25 + wob.x).toFixed(2) + 'deg)';
 
-        // Light and lenticular follow pointer + phone tilt together.
-        var x = clamp(cx + tiltPose.x, -1, 1);
-        var y = clamp(cy + tiltPose.y, -1, 1);
+        // Light and lenticular follow pointer + phone tilt together (and catch the wobble).
+        var x = clamp(cx + tiltPose.x + wob.y / 45, -1, 1);
+        var y = clamp(cy + tiltPose.y - wob.x / 45, -1, 1);
 
         sheen.style.backgroundImage = 'linear-gradient(' + (105 + y * 35).toFixed(1) + 'deg, transparent 40%, rgba(255,255,255,' +
           (0.07 + Math.abs(y) * 0.06).toFixed(3) + ') 50%, transparent 60%)';
@@ -411,6 +435,12 @@
           turn.v += (kz * (goal - turn.a) - cz * turn.v) * h;
           turn.a += turn.v * h;
         }
+        // Wobble spring: loose, so it rocks a few times before settling.
+        for (var j = 0; j < 2; j++) {
+          var hh = dt / 2;
+          wob.vy += (-60 * wob.y - 2 * 0.16 * Math.sqrt(60) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -75, 75);
+          wob.vx += (-80 * wob.x - 2 * 0.2 * Math.sqrt(80) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -25, 25);
+        }
         var k = reduced ? 0.2 : 0.09;
         var touchMode = !canHover || lastType !== 'mouse';
         if (touchMode && !touching && now - lastPointer > 3000 && (hasTilt || reduced)) {
@@ -430,7 +460,7 @@
         tiltPose.x += (tx - tiltPose.x) * 0.12;
         tiltPose.y += (ty - tiltPose.y) * 0.12;
 
-        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3) + ',' + turn.a.toFixed(2);
+        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3) + ',' + turn.a.toFixed(2) + ',' + wob.y.toFixed(2) + ',' + wob.x.toFixed(2);
         if (key !== lastKey) {
           lastKey = key;
           render();
