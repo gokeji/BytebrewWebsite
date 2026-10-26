@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ByteBrew App Studios</title>
   <meta name="description" content="ByteBrew App Studios">
   <meta name="theme-color" content="#070708">
@@ -34,6 +34,7 @@
       flex-direction: column;
       justify-content: space-between;
       gap: 40px;
+      overflow-x: hidden;
       font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     }
 
@@ -67,6 +68,7 @@
     .card {
       position: relative;
       width: min(560px, 100%, calc((var(--page-h, 100svh) - 190px) * 1.75));
+      container-type: inline-size;
       aspect-ratio: 7 / 4;
       border-radius: 14px;
       background: #0C0C0E;
@@ -75,7 +77,6 @@
       overflow: hidden;
       transform-style: preserve-3d;
       will-change: transform;
-      container-type: inline-size;
     }
 
     .frames {
@@ -140,8 +141,8 @@
 
     .labels {
       position: absolute;
-      left: 4.3cqw;
-      bottom: 3.2cqw;
+      left: 24px;
+      bottom: 18px;
       display: flex;
       gap: 14px;
       font-size: 10px;
@@ -214,13 +215,10 @@
     (function () {
       document.getElementById('year').textContent = new Date().getFullYear();
 
-      var TILT = 20;        // max card tilt in degrees from mouse / touch
-      var PHONE_NUDGE = 0.25; // how much phone tilt moves the card itself
-      var SNAP = 4.5;       // how quickly each word snaps in
-      var PERIOD = 9;       // lenticular strip width in px
+      var TILT = 20;      // max card tilt in degrees (mouse / tap)
+      var SNAP = 2.6;     // how quickly each word snaps in
+      var PERIOD = 9;     // lenticular strip width in px
 
-      var root = document.documentElement;
-      var body = document.body;
       var card = document.getElementById('card');
       var sheen = document.getElementById('sheen');
       var glare = document.getElementById('glare');
@@ -231,12 +229,29 @@
       var btn = document.getElementById('tilt-btn');
 
       var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
-      var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+      // Pointer pose (mouse on desktop, taps on phones): tilts the card AND drives the effects.
+      var pointer = { x: 0, y: 0 };
+      var cardPose = { x: 0, y: 0 };
+      var lastPointer = 0;
+
+      // Phone tilt: drives only the light and the lenticular effect; the card itself stays flat.
+      var tilt = { x: 0, y: 0 };
+      var tiltPose = { x: 0, y: 0 };
+      var hasTilt = false;
+      var betaRest = null;
+
+      var lastTop = -1;
+      var lastKey = '';
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-      /* ---------- Keep the page portrait when a phone turns sideways ---------- */
+      var DEG = Math.PI / 180;
+      var root = document.documentElement;
+      var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
+      var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+      // Phones turned sideways: counter-rotate the page so it stays portrait.
       var rot = 0;
       function screenAngle() {
         if (typeof window.orientation === 'number') return window.orientation;
@@ -248,12 +263,12 @@
         rot = (a === 90 || a === -90) ? a : 0;
         var w = window.innerWidth, h = window.innerHeight;
         if (rot) {
-          body.classList.add('locked');
+          document.body.classList.add('locked');
           root.style.setProperty('--page-w', h + 'px');
           root.style.setProperty('--page-h', w + 'px');
           root.style.setProperty('--page-rot', (-rot) + 'deg');
         } else {
-          body.classList.remove('locked');
+          document.body.classList.remove('locked');
           root.style.setProperty('--page-h', h + 'px');
         }
       }
@@ -262,33 +277,27 @@
       window.addEventListener('orientationchange', function () { setTimeout(layout, 50); });
       if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', layout);
 
-      // Screen coordinates -> page coordinates in -1..1, accounting for counter-rotation.
-      function toPage(cx, cy) {
-        var w = window.innerWidth, h = window.innerHeight;
-        if (!rot) return [cx / w * 2 - 1, cy / h * 2 - 1];
-        var dx = cx - w / 2, dy = cy - h / 2;
-        var th = rot * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
-        var lx = dx * c - dy * s, ly = dx * s + dy * c;
-        return [lx / (h / 2), ly / (w / 2)];
-      }
-
-      /* ---------- Inputs ---------- */
-      // Pointer (mouse on desktop, finger on phones): tilts the card and drives the effects.
-      var pointer = { x: 0, y: 0 };
-      var lastPointer = 0;
-      var touching = false;
-      var lastType = 'mouse';
-
       function setPointer(e) {
-        var p = toPage(e.clientX, e.clientY);
-        pointer.x = clamp(p[0], -1, 1);
-        pointer.y = clamp(p[1], -1, 1);
+        var w = window.innerWidth, h = window.innerHeight, px, py;
+        if (!rot) { px = e.clientX / w * 2 - 1; py = e.clientY / h * 2 - 1; }
+        else {
+          var dx = e.clientX - w / 2, dy = e.clientY - h / 2, c = Math.cos(rot * DEG), s = Math.sin(rot * DEG);
+          px = (dx * c - dy * s) / (h / 2); py = (dx * s + dy * c) / (w / 2);
+        }
+        pointer.x = clamp(px, -1, 1);
+        pointer.y = clamp(py, -1, 1);
         lastPointer = performance.now();
       }
+
+      // Quarter turns: once the phone is rotated well past 90 degrees, the card turns to stay upright.
+      var snapAngle = 0;
+      var turn = { a: 0, v: 0 };
       window.addEventListener('pointermove', function (e) {
         if (e.pointerType === 'mouse' && !canHover) return;
         setPointer(e);
       }, { passive: true });
+      var touching = false;
+      var lastType = 'mouse';
       window.addEventListener('pointerdown', function (e) {
         lastType = e.pointerType;
         if (e.target.closest && e.target.closest('a, button')) return;
@@ -296,24 +305,20 @@
         setPointer(e);
       }, { passive: true });
       function release(e) {
-        if (e.pointerType !== 'mouse') { touching = false; lastPointer = performance.now(); }
+        if (e.pointerType !== 'mouse') {
+          touching = false;
+          lastPointer = performance.now();
+        }
       }
       window.addEventListener('pointerup', release, { passive: true });
       window.addEventListener('pointercancel', release, { passive: true });
 
-      // Phone tilt: drives the light and the words, and nudges the card a little.
-      var tilt = { x: 0, y: 0, rawX: 0 };
-      var hasTilt = false;
-      var betaRest = null;
-      var snapAngle = 0;     // card's quarter-turn (0, 90, 180, 270) to stay upright as the phone rotates
-      var DEG = Math.PI / 180;
-
       window.addEventListener('deviceorientation', function (e) {
         if (e.gamma == null || e.beta == null) return;
-        if (!hasTilt) { hasTilt = true; btn.hidden = true; }
-
-        // Which way is "up" on the screen? Rotate the phone well past a quarter turn
-        // and the card turns to the nearest 90 degrees.
+        if (!hasTilt) {
+          hasTilt = true;
+          btn.hidden = true;
+        }
         var b = e.beta * DEG, g = e.gamma * DEG;
         var ux = -Math.sin(g) * Math.cos(b), uy = Math.sin(b);
         if (ux * ux + uy * uy > 0.3) {               // ignore when the phone is lying nearly flat
@@ -324,104 +329,42 @@
             betaRest = e.beta;
           }
         }
-
+        // Measure forward/back tilt relative to how the phone is being held, adapting slowly.
         if (betaRest === null) betaRest = e.beta;
-        betaRest += (e.beta - betaRest) * 0.004;   // "level" slowly follows how the phone is held
-
-        // Tilt in the card's own frame (so it still makes sense when the card has turned).
+        betaRest += (e.beta - betaRest) * 0.004;
+        // Tilt in the card's own frame, so it still makes sense after the card has turned.
         var c = Math.round(Math.cos(snapAngle * DEG)), sn = Math.round(Math.sin(snapAngle * DEG));
-        var gx = e.gamma, by = e.beta - betaRest;
-        var cx = gx * c + by * sn, cy = -gx * sn + by * c;
-        tilt.rawX = cx / 40;                       // unclamped, so the words keep cycling
-        tilt.x = clamp(cx / 40, -1, 1);
-        tilt.y = clamp(cy / 20, -1, 1);
+        var gx = e.gamma / 25, by = (e.beta - betaRest) / 20;
+        tilt.x = clamp(gx * c + by * sn, -1, 1);
+        tilt.y = clamp(-gx * sn + by * c, -1, 1);
       });
 
-      // Shakes: the card has inertia, so a jolt of the phone throws it the other way.
-      var gPrev = null;
-      window.addEventListener('devicemotion', function (e) {
-        var a = e.acceleration;
-        var ax, ay;
-        if (a && a.x != null) { ax = a.x; ay = a.y; }
-        else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) {
-          var g = e.accelerationIncludingGravity;
-          if (!gPrev) gPrev = { x: g.x, y: g.y };
-          gPrev.x += (g.x - gPrev.x) * 0.1; gPrev.y += (g.y - gPrev.y) * 0.1;
-          ax = g.x - gPrev.x; ay = g.y - gPrev.y;
-        } else return;
-        var mag = Math.sqrt(ax * ax + ay * ay);
-        if (mag < 1.2 || reduced) return;            // ignore hand tremor
-        var s = Math.cos(snapAngle * DEG) < -0.5 ? -1 : 1;
-        var dt = (e.interval ? (e.interval > 1 ? e.interval / 1000 : e.interval) : 0.016);
-        shake.vx += -s * ax * 2200 * dt;
-        shake.vy += s * ay * 2200 * dt;
-        spin.v += s * ax * 320 * dt;
-        pose.vx += -s * ax * 6 * dt;
-        pose.vy += s * ay * 6 * dt;
-      });
-
-      // iOS needs a tap before it shares motion data. Only ask if it isn't already coming through.
-      var DOE = window.DeviceOrientationEvent, DME = window.DeviceMotionEvent;
+      // iOS needs a tap before it shares motion data. Only ask if tilt isn't already coming through.
+      var DOE = window.DeviceOrientationEvent;
       if (DOE && typeof DOE.requestPermission === 'function' && 'ontouchstart' in window) {
         setTimeout(function () { if (!hasTilt) btn.hidden = false; }, 1200);
         btn.addEventListener('click', function () {
-          var asks = [DOE.requestPermission()];
-          if (DME && typeof DME.requestPermission === 'function') asks.push(DME.requestPermission());
-          Promise.all(asks).then(function (res) {
-            if (res[0] === 'granted') btn.hidden = true;
+          DOE.requestPermission().then(function (res) {
+            if (res === 'granted') btn.hidden = true;
           }).catch(function () {});
         });
       }
 
-      /* ---------- Physics: damped springs ---------- */
-      // pose: card tilt (-1..1), shake: card offset (px), spin: in-plane wobble (deg), flip: quarter-turn angle (deg)
-      var pose = { x: 0, y: 0, vx: 0, vy: 0 };
-      var shake = { x: 0, y: 0, vx: 0, vy: 0 };
-      var spin = { a: 0, v: 0 };
-      var flip = { a: 0, v: 0 };
-      var tiltFx = { x: 0, y: 0, rawX: 0 };
-
-      function spring(pos, vel, target, k, zeta, dt) {
-        var c = 2 * zeta * Math.sqrt(k);
-        vel += (k * (target - pos) - c * vel) * dt;
-        pos += vel * dt;
-        return [pos, vel];
-      }
-
-      function step(dt) {
-        var z = reduced ? 1 : 0.5;
-        var tx = pointer.x + (hasTilt ? tilt.x * PHONE_NUDGE : 0);
-        var ty = pointer.y + (hasTilt ? tilt.y * PHONE_NUDGE : 0);
-        var r = spring(pose.x, pose.vx, tx, 70, z, dt); pose.x = r[0]; pose.vx = r[1];
-        r = spring(pose.y, pose.vy, ty, 70, z, dt); pose.y = r[0]; pose.vy = r[1];
-
-        r = spring(shake.x, shake.vx, 0, 160, 0.16, dt); shake.x = clamp(r[0], -70, 70); shake.vx = r[1];
-        r = spring(shake.y, shake.vy, 0, 160, 0.16, dt); shake.y = clamp(r[0], -70, 70); shake.vy = r[1];
-        r = spring(spin.a, spin.v, 0, 120, 0.14, dt); spin.a = clamp(r[0], -28, 28); spin.v = r[1];
-        var goal = snapAngle + 360 * Math.round((flip.a - snapAngle) / 360);   // turn the short way round
-        r = spring(flip.a, flip.v, goal, 38, reduced ? 1 : 0.42, dt); flip.a = r[0]; flip.v = r[1];
-
-        var f = 1 - Math.exp(-dt * 8);
-        tiltFx.x += ((hasTilt ? tilt.x : 0) - tiltFx.x) * f;
-        tiltFx.y += ((hasTilt ? tilt.y : 0) - tiltFx.y) * f;
-        tiltFx.rawX += ((hasTilt ? tilt.rawX : 0) - tiltFx.rawX) * f;
-      }
-
-      /* ---------- Rendering ---------- */
-      var lastTop = -1;
-
       function render() {
-        var lift = Math.min(Math.abs(flip.v) * 0.06, 24);   // the card arcs toward you while turning
+        // Card tilt follows the pointer only (expressed in the card's frame after any quarter turn).
+        var th = turn.a * DEG, tc = Math.cos(th), ts = Math.sin(th);
+        var cx = cardPose.x * tc + cardPose.y * ts, cy = -cardPose.x * ts + cardPose.y * tc;
+        var lift = Math.min(Math.abs(turn.v) * 0.06, 24);   // arcs toward you while turning
         card.style.transform =
-          'translate3d(' + shake.x.toFixed(1) + 'px,' + (shake.y + pose.y * 28).toFixed(1) + 'px,0) ' +
-          'rotateZ(' + (flip.a + spin.a).toFixed(2) + 'deg) ' +
+          'translate3d(0,' + (cardPose.y * 28).toFixed(1) + 'px,0) ' +
+          'rotateZ(' + turn.a.toFixed(2) + 'deg) ' +
           'rotateX(' + lift.toFixed(2) + 'deg) ' +
-          'rotateY(' + (pose.x * TILT).toFixed(2) + 'deg) ' +
-          'rotateX(' + (-pose.y * TILT * 1.25).toFixed(2) + 'deg)';
+          'rotateY(' + (cx * TILT).toFixed(2) + 'deg) ' +
+          'rotateX(' + (-cy * TILT * 1.25).toFixed(2) + 'deg)';
 
-        // Light follows the card pose plus phone tilt.
-        var x = clamp(pose.x + tiltFx.x, -1, 1);
-        var y = clamp(pose.y + tiltFx.y, -1, 1);
+        // Light and lenticular follow pointer + phone tilt together.
+        var x = clamp(cx + tiltPose.x, -1, 1);
+        var y = clamp(cy + tiltPose.y, -1, 1);
 
         sheen.style.backgroundImage = 'linear-gradient(' + (105 + y * 35).toFixed(1) + 'deg, transparent 40%, rgba(255,255,255,' +
           (0.07 + Math.abs(y) * 0.06).toFixed(3) + ') 50%, transparent 60%)';
@@ -436,13 +379,9 @@
 
         app.style.backgroundPosition = '0 ' + (y * 6).toFixed(2) + 'px';
 
-        // Lenticular words sit on a loop: ByteBrew -> App -> Studios -> ByteBrew ...
-        var phase = 1 / 3 + (pose.x + tiltFx.rawX) * (2 / 3);
-        phase = phase - Math.floor(phase);
-        var w = [0, 1 / 3, 2 / 3].map(function (c) {
-          var d = Math.abs(phase - c); d = Math.min(d, 1 - d);
-          return Math.max(0, 1 - d * SNAP);
-        });
+        var t = clamp((x + 1) / 2, 0, 1);
+        var centers = [0, 0.5, 1];
+        var w = centers.map(function (c) { return Math.max(0, 1 - Math.abs(t - c) * SNAP); });
         var sum = (w[0] + w[1] + w[2]) || 1;
         var start = 0;
         frames.forEach(function (el, i) {
@@ -462,28 +401,40 @@
       }
 
       var lastNow = performance.now();
-      var lastKey = '';
-
       function tick(now) {
         var dt = clamp((now - lastNow) / 1000, 0, 1 / 20);
         lastNow = now;
-
+        // Quarter-turn spring: a little overshoot, then it settles.
+        var goal = snapAngle + 360 * Math.round((turn.a - snapAngle) / 360);
+        for (var i = 0; i < 2; i++) {
+          var h = dt / 2, kz = 38, cz = 2 * (reduced ? 1 : 0.42) * Math.sqrt(kz);
+          turn.v += (kz * (goal - turn.a) - cz * turn.v) * h;
+          turn.a += turn.v * h;
+        }
+        var k = reduced ? 0.2 : 0.09;
         var touchMode = !canHover || lastType !== 'mouse';
         if (touchMode && !touching && now - lastPointer > 3000 && (hasTilt || reduced)) {
-          // On phones, a few seconds after the finger lifts the card settles back to centre.
-          pointer.x = 0; pointer.y = 0;
+          // On phones, a few seconds after the finger lifts, ease the card back to flat
+          // so phone tilt reads cleanly again.
+          pointer.x = 0;
+          pointer.y = 0;
+          k = 0.05;
         } else if (!reduced && !hasTilt && !touching && now - lastPointer > 2500) {
           // With no input at all, drift gently so the card never looks frozen.
           pointer.x = Math.sin(now * 0.00028) * 0.9;
           pointer.y = Math.sin(now * 0.00023 + 1) * 0.6;
         }
+        cardPose.x += (pointer.x - cardPose.x) * k;
+        cardPose.y += (pointer.y - cardPose.y) * k;
+        var tx = hasTilt ? tilt.x : 0, ty = hasTilt ? tilt.y : 0;
+        tiltPose.x += (tx - tiltPose.x) * 0.12;
+        tiltPose.y += (ty - tiltPose.y) * 0.12;
 
-        // Two sub-steps keep the springs stable at low frame rates.
-        step(dt / 2); step(dt / 2);
-
-        var key = [pose.x, pose.y, shake.x, shake.y, spin.a, flip.a, tiltFx.x, tiltFx.y, tiltFx.rawX]
-          .map(function (v) { return v.toFixed(3); }).join(',');
-        if (key !== lastKey) { lastKey = key; render(); }
+        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3) + ',' + turn.a.toFixed(2);
+        if (key !== lastKey) {
+          lastKey = key;
+          render();
+        }
         requestAnimationFrame(tick);
       }
 
