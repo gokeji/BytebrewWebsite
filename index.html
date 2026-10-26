@@ -101,9 +101,22 @@
     .sheen {
       position: absolute;
       inset: 0;
-      background-image: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.09) 50%, transparent 60%);
-      background-size: 260% 100%;
-      background-position: 50% 0%;
+      background-size: 260% 260%;
+      background-position: 50% 50%;
+      background-repeat: no-repeat;
+    }
+
+    .glare {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .edge {
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      pointer-events: none;
     }
 
     .labels {
@@ -162,6 +175,8 @@
       </div>
       <div class="ridges"></div>
       <div class="sheen" id="sheen"></div>
+      <div class="glare" id="glare"></div>
+      <div class="edge" id="edge"></div>
       <div class="labels">
         <span data-label="0">ByteBrew</span>
         <span data-label="1">App</span>
@@ -172,7 +187,7 @@
 
   <footer>
     <a href="mailto:info@bytebrew.xyz">info@bytebrew.xyz</a>
-    <button type="button" class="tilt-btn" id="tilt-btn" hidden>Tilt the card</button>
+    <button type="button" class="tilt-btn" id="tilt-btn" hidden>Enable tilt</button>
     <span>&copy; <span id="year">2026</span> ByteBrew LLC</span>
   </footer>
 
@@ -180,42 +195,70 @@
     (function () {
       document.getElementById('year').textContent = new Date().getFullYear();
 
-      var TILT = 20;      // max tilt in degrees
+      var TILT = 20;      // max card tilt in degrees (mouse / tap)
       var SNAP = 2.6;     // how quickly each word snaps in
       var PERIOD = 9;     // lenticular strip width in px
 
       var card = document.getElementById('card');
       var sheen = document.getElementById('sheen');
+      var glare = document.getElementById('glare');
+      var edge = document.getElementById('edge');
+      var app = document.querySelector('.w-app');
       var frames = Array.prototype.slice.call(document.querySelectorAll('[data-frame]'));
       var labels = Array.prototype.slice.call(document.querySelectorAll('[data-label]'));
       var btn = document.getElementById('tilt-btn');
 
       var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      var target = { x: 0, y: 0 };
-      var cur = { x: 0, y: 0 };
-      var lastInput = 0;
+
+      // Pointer pose (mouse on desktop, taps on phones): tilts the card AND drives the effects.
+      var pointer = { x: 0, y: 0 };
+      var cardPose = { x: 0, y: 0 };
+      var lastPointer = 0;
+
+      // Phone tilt: drives only the light and the lenticular effect; the card itself stays flat.
+      var tilt = { x: 0, y: 0 };
+      var tiltPose = { x: 0, y: 0 };
+      var hasTilt = false;
+      var betaRest = null;
+
       var lastTop = -1;
+      var lastKey = '';
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+      function setPointer(e) {
+        pointer.x = clamp((e.clientX / window.innerWidth) * 2 - 1, -1, 1);
+        pointer.y = clamp((e.clientY / window.innerHeight) * 2 - 1, -1, 1);
+        lastPointer = performance.now();
+      }
+
+      var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
       window.addEventListener('pointermove', function (e) {
-        target.x = (e.clientX / window.innerWidth) * 2 - 1;
-        target.y = (e.clientY / window.innerHeight) * 2 - 1;
-        lastInput = performance.now();
+        if (e.pointerType === 'mouse' && !canHover) return;
+        setPointer(e);
+      }, { passive: true });
+      window.addEventListener('pointerdown', function (e) {
+        if (e.target.closest && e.target.closest('a, button')) return;
+        setPointer(e);
       }, { passive: true });
 
-      function onTilt(e) {
-        if (e.gamma == null) return;
-        target.x = clamp(e.gamma / 25, -1, 1);
-        target.y = clamp((e.beta - 45) / 25, -1, 1);
-        lastInput = performance.now();
-      }
-      window.addEventListener('deviceorientation', onTilt);
+      window.addEventListener('deviceorientation', function (e) {
+        if (e.gamma == null || e.beta == null) return;
+        if (!hasTilt) {
+          hasTilt = true;
+          btn.hidden = true;
+        }
+        // Measure forward/back tilt relative to how the phone is being held, adapting slowly.
+        if (betaRest === null) betaRest = e.beta;
+        betaRest += (e.beta - betaRest) * 0.004;
+        tilt.x = clamp(e.gamma / 25, -1, 1);
+        tilt.y = clamp((e.beta - betaRest) / 20, -1, 1);
+      });
 
-      // iOS asks for permission before sharing motion data.
+      // iOS needs a tap before it shares motion data. Only ask if tilt isn't already coming through.
       var DOE = window.DeviceOrientationEvent;
       if (DOE && typeof DOE.requestPermission === 'function' && 'ontouchstart' in window) {
-        btn.hidden = false;
+        setTimeout(function () { if (!hasTilt) btn.hidden = false; }, 1200);
         btn.addEventListener('click', function () {
           DOE.requestPermission().then(function (res) {
             if (res === 'granted') btn.hidden = true;
@@ -224,13 +267,29 @@
       }
 
       function render() {
-        var x = cur.x, y = cur.y;
-
+        // Card tilt follows the pointer only.
+        var cx = cardPose.x, cy = cardPose.y;
         card.style.transform =
-          'translate3d(0,' + (y * 28).toFixed(1) + 'px,0) ' +
-          'rotateY(' + (x * TILT).toFixed(2) + 'deg) ' +
-          'rotateX(' + (-y * TILT * 1.25).toFixed(2) + 'deg)';
-        sheen.style.backgroundPosition = (50 - x * 60).toFixed(1) + '% 0%';
+          'translate3d(0,' + (cy * 28).toFixed(1) + 'px,0) ' +
+          'rotateY(' + (cx * TILT).toFixed(2) + 'deg) ' +
+          'rotateX(' + (-cy * TILT * 1.25).toFixed(2) + 'deg)';
+
+        // Light and lenticular follow pointer + phone tilt together.
+        var x = clamp(cx + tiltPose.x, -1, 1);
+        var y = clamp(cy + tiltPose.y, -1, 1);
+
+        sheen.style.backgroundImage = 'linear-gradient(' + (105 + y * 35).toFixed(1) + 'deg, transparent 40%, rgba(255,255,255,' +
+          (0.07 + Math.abs(y) * 0.06).toFixed(3) + ') 50%, transparent 60%)';
+        sheen.style.backgroundPosition = clamp(50 - x * 60, 0, 100).toFixed(1) + '% ' + clamp(50 - y * 60, 0, 100).toFixed(1) + '%';
+
+        glare.style.background = 'radial-gradient(ellipse 75% 65% at ' + (50 - x * 45).toFixed(1) + '% ' +
+          (50 - y * 85).toFixed(1) + '%, rgba(240,205,150,' + (0.06 + Math.abs(y) * 0.07).toFixed(3) + '), transparent 70%)';
+
+        var topLight = 0.04 + Math.max(0, -y) * 0.24;
+        var bottomLight = 0.03 + Math.max(0, y) * 0.2;
+        edge.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,' + topLight.toFixed(3) + '), inset 0 -1px 0 rgba(255,255,255,' + bottomLight.toFixed(3) + ')';
+
+        app.style.backgroundPosition = '0 ' + (y * 6).toFixed(2) + 'px';
 
         var t = clamp((x + 1) / 2, 0, 1);
         var centers = [0, 0.5, 1];
@@ -254,15 +313,21 @@
       }
 
       function tick(now) {
-        if (!reduced && now - lastInput > 2500) {
-          target.x = Math.sin(now * 0.00028) * 0.9;
-          target.y = Math.sin(now * 0.00023 + 1) * 0.6;
+        // With no input at all, drift gently so the card never looks frozen.
+        if (!reduced && !hasTilt && now - lastPointer > 2500) {
+          pointer.x = Math.sin(now * 0.00028) * 0.9;
+          pointer.y = Math.sin(now * 0.00023 + 1) * 0.6;
         }
         var k = reduced ? 0.2 : 0.09;
-        var nx = cur.x + (target.x - cur.x) * k;
-        var ny = cur.y + (target.y - cur.y) * k;
-        if (Math.abs(nx - cur.x) + Math.abs(ny - cur.y) > 0.0004 || lastTop === -1) {
-          cur.x = nx; cur.y = ny;
+        cardPose.x += (pointer.x - cardPose.x) * k;
+        cardPose.y += (pointer.y - cardPose.y) * k;
+        var tx = hasTilt ? tilt.x : 0, ty = hasTilt ? tilt.y : 0;
+        tiltPose.x += (tx - tiltPose.x) * 0.12;
+        tiltPose.y += (ty - tiltPose.y) * 0.12;
+
+        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3);
+        if (key !== lastKey) {
+          lastKey = key;
           render();
         }
         requestAnimationFrame(tick);
