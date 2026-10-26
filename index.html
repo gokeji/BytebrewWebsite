@@ -291,7 +291,10 @@
       }
 
       // Quarter turns: once the phone is rotated well past 90 degrees, the card turns to stay upright.
-      var snapAngle = 0;
+      var snapAngle = 0;        // the quarter turn the phone is in now
+      var shownSnap = 0;        // the quarter turn the card is heading for (follows after a short beat)
+      var snapChangedAt = 0;
+      var SNAP_LAG = 150;       // ms: the card "notices" the phone turned, then catches up
       var turn = { a: 0, v: 0 };
 
       // Shake wobble: the card rocks around its own vertical axis, as if about to flip over.
@@ -353,6 +356,7 @@
           var off = ((phi - snapAngle) % 360 + 540) % 360 - 180;
           if (Math.abs(off) > 60) {
             snapAngle = ((Math.round(phi / 90) * 90) % 360 + 360) % 360;
+            snapChangedAt = performance.now();
             betaRest = e.beta;
           }
         }
@@ -443,7 +447,8 @@
         var dt = clamp((now - lastNow) / 1000, 0, 1 / 20);
         lastNow = now;
         // Quarter-turn spring: a little overshoot, then it settles.
-        var goal = snapAngle + 360 * Math.round((turn.a - snapAngle) / 360);
+        if (shownSnap !== snapAngle && now - snapChangedAt > (reduced ? 0 : SNAP_LAG)) shownSnap = snapAngle;
+        var goal = shownSnap + 360 * Math.round((turn.a - shownSnap) / 360);
         for (var i = 0; i < 2; i++) {
           var h = dt / 2, kz = 150, cz = 2 * (reduced ? 1 : 0.55) * Math.sqrt(kz);  // ~0.5 s, one gentle overshoot
           turn.v += (kz * (goal - turn.a) - cz * turn.v) * h;
@@ -452,15 +457,15 @@
         // Wobble spring: loose, so it rocks a few times before settling.
         for (var j = 0; j < 2; j++) {
           var hh = dt / 2;
-          // ~0.5 s period with moderate bounce. Each axis has a slightly different stiffness and
+          // ~0.5 s period, lightly damped so it rings out naturally (~1 s). Each axis has a slightly different stiffness and
           // damping so they settle at different moments (follow-through), which reads as alive.
-          wob.vy += (-160 * wob.y - 2 * 0.40 * Math.sqrt(160) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -24, 24);
-          wob.vz += (-210 * wob.z - 2 * 0.45 * Math.sqrt(210) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -10, 10);
-          wob.vx += (-185 * wob.x - 2 * 0.50 * Math.sqrt(185) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -14, 14);
+          wob.vy += (-150 * wob.y - 2 * 0.27 * Math.sqrt(150) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -24, 24);
+          wob.vz += (-200 * wob.z - 2 * 0.31 * Math.sqrt(200) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -10, 10);
+          wob.vx += (-175 * wob.x - 2 * 0.35 * Math.sqrt(175) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -14, 14);
           // Positional lag: stiffer and better damped, so it leads and the rotation follows.
-          bob.vx += (-320 * bob.x - 2 * 0.6 * Math.sqrt(320) * bob.vx) * hh; bob.x = clamp(bob.x + bob.vx * hh, -4, 4);
-          bob.vy += (-320 * bob.y - 2 * 0.6 * Math.sqrt(320) * bob.vy) * hh; bob.y = clamp(bob.y + bob.vy * hh, -4, 4);
-          bob.vz += (-260 * bob.z - 2 * 0.55 * Math.sqrt(260) * bob.vz) * hh; bob.z = clamp(bob.z + bob.vz * hh, -14, 14);
+          bob.vx += (-300 * bob.x - 2 * 0.45 * Math.sqrt(300) * bob.vx) * hh; bob.x = clamp(bob.x + bob.vx * hh, -4, 4);
+          bob.vy += (-300 * bob.y - 2 * 0.45 * Math.sqrt(300) * bob.vy) * hh; bob.y = clamp(bob.y + bob.vy * hh, -4, 4);
+          bob.vz += (-240 * bob.z - 2 * 0.42 * Math.sqrt(240) * bob.vz) * hh; bob.z = clamp(bob.z + bob.vz * hh, -14, 14);
         }
         var k = reduced ? 0.2 : 0.09;
         var touchMode = !canHover || lastType !== 'mouse';
