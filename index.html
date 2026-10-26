@@ -2,38 +2,276 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ByteBrew App Studios</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ByteBrew App Studios</title>
+  <meta name="description" content="ByteBrew App Studios">
+  <meta name="theme-color" content="#070708">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,900&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      background: #070708;
+      color: #EDEBE6;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100svh;
+      padding: clamp(20px, 4vw, 48px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 40px;
+      overflow-x: hidden;
+      font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    a { color: #A9A7A2; text-decoration: none; transition: color .4s; }
+    a:hover, a:focus-visible { color: #EDEBE6; }
+
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    .spacer { height: 11px; }
+
+    main {
+      display: flex;
+      justify-content: center;
+      perspective: 1000px;
+    }
+
+    .card {
+      position: relative;
+      width: min(560px, 100%);
+      aspect-ratio: 7 / 4;
+      border-radius: 14px;
+      background: #0C0C0E;
+      border: 1px solid #24242A;
+      box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    .frames {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .word {
+      grid-area: 1 / 1;
+      padding: 0.22em 0.16em;
+      font-family: 'Playfair Display', Georgia, serif;
+      font-style: italic;
+      font-weight: 900;
+      font-size: clamp(40px, 11vw, 92px);
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+
+    .w-bytebrew { color: #EDEBE6; }
+
+    .w-app {
+      color: transparent;
+      background-image: repeating-linear-gradient(180deg, #F0CD96 0 1.6px, transparent 1.6px 5px);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .w-studios {
+      color: transparent;
+      -webkit-text-stroke: 1.5px #C9A27A;
+    }
+
+    .ridges {
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 9px);
+    }
+
+    .sheen {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.09) 50%, transparent 60%);
+      background-size: 260% 100%;
+      background-position: 50% 0%;
+    }
+
+    .labels {
+      position: absolute;
+      left: 24px;
+      bottom: 18px;
+      display: flex;
+      gap: 14px;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .labels span { color: #5E5E63; transition: color .3s; }
+    .labels span.on { color: #EDEBE6; }
+
+    footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px 32px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #8C8C91;
+    }
+
+    .tilt-btn {
+      min-height: 44px;
+      padding: 0 16px;
+      background: transparent;
+      border: 1px solid #3A3A3E;
+      border-radius: 22px;
+      color: #A9A7A2;
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      cursor: pointer;
+    }
+
+    .tilt-btn[hidden] { display: none; }
+  </style>
 </head>
 
 <body>
-    <header>
-        <nav>
-            <a href="." class="logo">ByteBrew App Studios</a>
-        </nav>
-    </header>
+  <h1 class="sr-only">ByteBrew App Studios</h1>
+  <span class="spacer" aria-hidden="true"></span>
 
-    <main>
-        <section class="hero">
-            <div class="hero-content">
-                <h1>ByteBrew</h1>
-                <p>At ByteBrew, we believe in harnessing the power of technology to make life better.</p>
-                <div class="splash-image-wrapper">
-                    <img src="center-image.jpg" alt="Splash Image" class="splash-image">
-                </div>
-                <div class="email-button-container">
-                    <a href="mailto:info@bytebrew.xyz" class="email-button">Contact Us</a>
-                </div>
-            </div>
-        </section>
-    </main>
+  <main>
+    <div class="card" id="card" aria-hidden="true">
+      <div class="frames">
+        <span class="word w-bytebrew" data-frame="0">ByteBrew</span>
+        <span class="word w-app" data-frame="1">App</span>
+        <span class="word w-studios" data-frame="2">Studios</span>
+      </div>
+      <div class="ridges"></div>
+      <div class="sheen" id="sheen"></div>
+      <div class="labels">
+        <span data-label="0">ByteBrew</span>
+        <span data-label="1">App</span>
+        <span data-label="2">Studios</span>
+      </div>
+    </div>
+  </main>
 
-    <footer>
-        <p><a href="/turn-timer/privacy/" style="color: inherit;">Turn Timer privacy policy</a></p>
-        <p>&copy; 2024 ByteBrew LLC. All rights reserved.</p>
-    </footer>
+  <footer>
+    <a href="mailto:info@bytebrew.xyz">info@bytebrew.xyz</a>
+    <button type="button" class="tilt-btn" id="tilt-btn" hidden>Tilt the card</button>
+    <span>&copy; <span id="year">2026</span> ByteBrew LLC</span>
+  </footer>
+
+  <script>
+    (function () {
+      document.getElementById('year').textContent = new Date().getFullYear();
+
+      var TILT = 20;      // max tilt in degrees
+      var SNAP = 2.6;     // how quickly each word snaps in
+      var PERIOD = 9;     // lenticular strip width in px
+
+      var card = document.getElementById('card');
+      var sheen = document.getElementById('sheen');
+      var frames = Array.prototype.slice.call(document.querySelectorAll('[data-frame]'));
+      var labels = Array.prototype.slice.call(document.querySelectorAll('[data-label]'));
+      var btn = document.getElementById('tilt-btn');
+
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var target = { x: 0, y: 0 };
+      var cur = { x: 0, y: 0 };
+      var lastInput = 0;
+      var lastTop = -1;
+
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+      window.addEventListener('pointermove', function (e) {
+        target.x = (e.clientX / window.innerWidth) * 2 - 1;
+        target.y = (e.clientY / window.innerHeight) * 2 - 1;
+        lastInput = performance.now();
+      }, { passive: true });
+
+      function onTilt(e) {
+        if (e.gamma == null) return;
+        target.x = clamp(e.gamma / 25, -1, 1);
+        target.y = clamp((e.beta - 45) / 25, -1, 1);
+        lastInput = performance.now();
+      }
+      window.addEventListener('deviceorientation', onTilt);
+
+      // iOS asks for permission before sharing motion data.
+      var DOE = window.DeviceOrientationEvent;
+      if (DOE && typeof DOE.requestPermission === 'function' && 'ontouchstart' in window) {
+        btn.hidden = false;
+        btn.addEventListener('click', function () {
+          DOE.requestPermission().then(function (res) {
+            if (res === 'granted') btn.hidden = true;
+          }).catch(function () {});
+        });
+      }
+
+      function render() {
+        var x = cur.x, y = cur.y;
+
+        card.style.transform =
+          'translate3d(0,' + (y * 28).toFixed(1) + 'px,0) ' +
+          'rotateY(' + (x * TILT).toFixed(2) + 'deg) ' +
+          'rotateX(' + (-y * TILT * 1.25).toFixed(2) + 'deg)';
+        sheen.style.backgroundPosition = (50 - x * 60).toFixed(1) + '% 0%';
+
+        var t = clamp((x + 1) / 2, 0, 1);
+        var centers = [0, 0.5, 1];
+        var w = centers.map(function (c) { return Math.max(0, 1 - Math.abs(t - c) * SNAP); });
+        var sum = (w[0] + w[1] + w[2]) || 1;
+        var start = 0;
+        frames.forEach(function (el, i) {
+          var a = PERIOD * w[i] / sum, s = start, e = start + a;
+          start = e;
+          var m = 'repeating-linear-gradient(90deg, transparent 0 ' + s.toFixed(2) + 'px, #000 ' +
+            s.toFixed(2) + 'px ' + e.toFixed(2) + 'px, transparent ' + e.toFixed(2) + 'px ' + PERIOD + 'px)';
+          el.style.webkitMaskImage = m;
+          el.style.maskImage = m;
+        });
+
+        var top = w.indexOf(Math.max(w[0], w[1], w[2]));
+        if (top !== lastTop) {
+          labels.forEach(function (el, i) { el.classList.toggle('on', i === top); });
+          lastTop = top;
+        }
+      }
+
+      function tick(now) {
+        if (!reduced && now - lastInput > 2500) {
+          target.x = Math.sin(now * 0.00028) * 0.9;
+          target.y = Math.sin(now * 0.00023 + 1) * 0.6;
+        }
+        var k = reduced ? 0.2 : 0.09;
+        var nx = cur.x + (target.x - cur.x) * k;
+        var ny = cur.y + (target.y - cur.y) * k;
+        if (Math.abs(nx - cur.x) + Math.abs(ny - cur.y) > 0.0004 || lastTop === -1) {
+          cur.x = nx; cur.y = ny;
+          render();
+        }
+        requestAnimationFrame(tick);
+      }
+
+      render();
+      requestAnimationFrame(tick);
+    })();
+  </script>
 </body>
 
 </html>
