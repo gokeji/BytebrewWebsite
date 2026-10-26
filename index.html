@@ -296,6 +296,7 @@
 
       // Shake wobble: the card rocks around its own vertical axis, as if about to flip over.
       var wob = { y: 0, vy: 0, x: 0, vx: 0, z: 0, vz: 0 };
+      var bob = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };   // a few px of inertial lag: gives the card weight
       var gPrev = null;
       window.addEventListener('devicemotion', function (e) {
         if (reduced) return;
@@ -312,10 +313,11 @@
         // Side-to-side shakes rock it around its vertical axis; in/out and up/down add a little nod.
         var c = Math.round(Math.cos(snapAngle * DEG)), sn = Math.round(Math.sin(snapAngle * DEG));
         var cxA = ax * c - ay * sn, cyA = ax * sn + ay * c;
-        // A quick, small rock on all three axes.
-        wob.vy = clamp(wob.vy - cxA * 300 * dt, -600, 600);
-        wob.vz = clamp(wob.vz + cxA * 110 * dt, -250, 250);
-        wob.vx = clamp(wob.vx + (cyA * 140 + az * 90) * dt, -300, 300);
+        // The card lags the jolt by a hair (tiny shift, mostly depth), then rocks on all three axes.
+        bob.vx += -ax * 45 * dt; bob.vy += ay * 45 * dt; bob.vz += -az * 150 * dt;
+        wob.vy = clamp(wob.vy - cxA * 380 * dt, -700, 700);
+        wob.vz = clamp(wob.vz + cxA * 180 * dt, -350, 350);
+        wob.vx = clamp(wob.vx + (cyA * 220 + az * 140) * dt, -450, 450);
       });
       window.addEventListener('pointermove', function (e) {
         if (e.pointerType === 'mouse' && !canHover) return;
@@ -382,11 +384,13 @@
         // Card tilt follows the pointer only (expressed in the card's frame after any quarter turn).
         var th = turn.a * DEG, tc = Math.cos(th), ts = Math.sin(th);
         var cx = cardPose.x * tc + cardPose.y * ts, cy = -cardPose.x * ts + cardPose.y * tc;
-        var lift = Math.min(Math.abs(turn.v) * 0.025, 14);  // arcs toward you while turning
+        var lift = Math.min(Math.abs(turn.v) * 0.03, 16);   // arcs toward you while turning
+        var bank = clamp(turn.v * 0.012, -7, 7);             // and banks a little into the turn
         card.style.transform =
-          'translate3d(0,' + (cardPose.y * 28).toFixed(1) + 'px,0) ' +
+          'translate3d(' + bob.x.toFixed(2) + 'px,' + (cardPose.y * 28 + bob.y).toFixed(2) + 'px,' + (bob.z + lift * 0.6).toFixed(2) + 'px) ' +
           'rotateZ(' + (turn.a + wob.z).toFixed(2) + 'deg) ' +
           'rotateX(' + lift.toFixed(2) + 'deg) ' +
+          'rotateY(' + bank.toFixed(2) + 'deg) ' +
           'rotateY(' + (cx * TILT + wob.y).toFixed(2) + 'deg) ' +
           'rotateX(' + (-cy * TILT * 1.25 + wob.x).toFixed(2) + 'deg)';
 
@@ -441,17 +445,22 @@
         // Quarter-turn spring: a little overshoot, then it settles.
         var goal = snapAngle + 360 * Math.round((turn.a - snapAngle) / 360);
         for (var i = 0; i < 2; i++) {
-          var h = dt / 2, kz = 170, cz = 2 * (reduced ? 1 : 0.6) * Math.sqrt(kz);   // settles in ~0.5 s
+          var h = dt / 2, kz = 150, cz = 2 * (reduced ? 1 : 0.55) * Math.sqrt(kz);  // ~0.5 s, one gentle overshoot
           turn.v += (kz * (goal - turn.a) - cz * turn.v) * h;
           turn.a += turn.v * h;
         }
         // Wobble spring: loose, so it rocks a few times before settling.
         for (var j = 0; j < 2; j++) {
           var hh = dt / 2;
-          // Stiff and well damped: a couple of quick rocks, settled in about half a second.
-          wob.vy += (-220 * wob.y - 2 * 0.38 * Math.sqrt(220) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -24, 24);
-          wob.vz += (-260 * wob.z - 2 * 0.4 * Math.sqrt(260) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -8, 8);
-          wob.vx += (-240 * wob.x - 2 * 0.4 * Math.sqrt(240) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -10, 10);
+          // ~0.5 s period with moderate bounce. Each axis has a slightly different stiffness and
+          // damping so they settle at different moments (follow-through), which reads as alive.
+          wob.vy += (-160 * wob.y - 2 * 0.40 * Math.sqrt(160) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -24, 24);
+          wob.vz += (-210 * wob.z - 2 * 0.45 * Math.sqrt(210) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -10, 10);
+          wob.vx += (-185 * wob.x - 2 * 0.50 * Math.sqrt(185) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -14, 14);
+          // Positional lag: stiffer and better damped, so it leads and the rotation follows.
+          bob.vx += (-320 * bob.x - 2 * 0.6 * Math.sqrt(320) * bob.vx) * hh; bob.x = clamp(bob.x + bob.vx * hh, -4, 4);
+          bob.vy += (-320 * bob.y - 2 * 0.6 * Math.sqrt(320) * bob.vy) * hh; bob.y = clamp(bob.y + bob.vy * hh, -4, 4);
+          bob.vz += (-260 * bob.z - 2 * 0.55 * Math.sqrt(260) * bob.vz) * hh; bob.z = clamp(bob.z + bob.vz * hh, -14, 14);
         }
         var k = reduced ? 0.2 : 0.09;
         var touchMode = !canHover || lastType !== 'mouse';
@@ -473,7 +482,7 @@
         tiltRaw += ((hasTilt ? tilt.rawX : 0) - tiltRaw) * 0.12;
         tiltPose.y += (ty - tiltPose.y) * 0.12;
 
-        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3) + ',' + turn.a.toFixed(2) + ',' + wob.y.toFixed(2) + ',' + wob.x.toFixed(2) + ',' + wob.z.toFixed(2) + ',' + tiltRaw.toFixed(3);
+        var key = cardPose.x.toFixed(3) + ',' + cardPose.y.toFixed(3) + ',' + tiltPose.x.toFixed(3) + ',' + tiltPose.y.toFixed(3) + ',' + turn.a.toFixed(2) + ',' + wob.y.toFixed(2) + ',' + wob.x.toFixed(2) + ',' + wob.z.toFixed(2) + ',' + tiltRaw.toFixed(3) + ',' + bob.x.toFixed(2) + ',' + bob.y.toFixed(2) + ',' + bob.z.toFixed(2);
         if (key !== lastKey) {
           lastKey = key;
           render();
