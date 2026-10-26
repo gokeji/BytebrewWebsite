@@ -66,7 +66,8 @@
 
     .card {
       position: relative;
-      width: min(560px, 100%, calc((var(--page-h, 100svh) - 190px) * 1.75));
+      /* small enough to spin freely inside the page at any angle */
+      width: min(560px, calc((var(--page-w, 100vw) - 8px) / 1.16), calc((var(--page-h, 100svh) - 190px) * 1.75));
       aspect-ratio: 7 / 4;
       border-radius: 14px;
       background: #0C0C0E;
@@ -214,10 +215,19 @@
     (function () {
       document.getElementById('year').textContent = new Date().getFullYear();
 
-      var TILT = 20;        // max card tilt in degrees from mouse / touch
-      var PHONE_NUDGE = 0.25; // how much phone tilt moves the card itself
-      var SNAP = 4.5;       // how quickly each word snaps in
-      var PERIOD = 9;       // lenticular strip width in px
+      /* ================= Tuning ================= */
+      var TILT = 20;            // card tilt (deg) at full pointer deflection
+      var SNAP = 4.5;           // how quickly each lenticular word snaps in
+      var PERIOD = 9;           // lenticular strip width (px)
+      var YAW_PER_LOOP = 100;   // degrees of turning the phone for one full ByteBrew -> App -> Studios loop
+
+      var PEND_W2 = 30;         // pendulum stiffness (rad/s^2): how strongly the card hangs "upright"
+      var PIVOT_DAMP = 1.5;     // pivot friction (1/s): how fast swings and spins die down
+      var TWIST_COUPLE = 0.9;   // how much a quick in-plane twist of the phone is felt by the card
+      var TILT_COUPLE = 0.6;    // how much quick forward/back/side tilts make the card lag in 3D
+      var BOUNCE_GAIN = 200;    // lateral bounce from jolts (kept small on purpose)
+      var DEPTH_GAIN = 500;     // toward/away bounce from jolts
+      var FLICK_GAIN = 380;     // spin from flicking across the card with a finger or mouse
 
       var root = document.documentElement;
       var body = document.body;
@@ -233,10 +243,11 @@
       var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       var canHover = !window.matchMedia || window.matchMedia('(hover: hover)').matches;
       var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      var DEG = Math.PI / 180;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-      /* ---------- Keep the page portrait when a phone turns sideways ---------- */
+      /* ================= Keep the page portrait on phones ================= */
       var rot = 0;
       function screenAngle() {
         if (typeof window.orientation === 'number') return window.orientation;
@@ -254,6 +265,7 @@
           root.style.setProperty('--page-rot', (-rot) + 'deg');
         } else {
           body.classList.remove('locked');
+          root.style.setProperty('--page-w', w + 'px');
           root.style.setProperty('--page-h', h + 'px');
         }
       }
@@ -262,28 +274,51 @@
       window.addEventListener('orientationchange', function () { setTimeout(layout, 50); });
       if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', layout);
 
-      // Screen coordinates -> page coordinates in -1..1, accounting for counter-rotation.
+      // Screen point -> page coordinates in -1..1 (x right, y down), undoing the counter-rotation.
       function toPage(cx, cy) {
         var w = window.innerWidth, h = window.innerHeight;
         if (!rot) return [cx / w * 2 - 1, cy / h * 2 - 1];
         var dx = cx - w / 2, dy = cy - h / 2;
-        var th = rot * Math.PI / 180, c = Math.cos(th), s = Math.sin(th);
-        var lx = dx * c - dy * s, ly = dx * s + dy * c;
-        return [lx / (h / 2), ly / (w / 2)];
+        var c = Math.cos(rot * DEG), s = Math.sin(rot * DEG);
+        return [(dx * c - dy * s) / (h / 2), (dx * s + dy * c) / (w / 2)];
       }
 
-      /* ---------- Inputs ---------- */
-      // Pointer (mouse on desktop, finger on phones): tilts the card and drives the effects.
+      /* ================= Card state ================= */
+      var pose = { x: 0, y: 0, vx: 0, vy: 0 };          // 3D tilt of the card in its own frame (-1..1)
+      var spin = { a: 0, v: 0 };                         // in-plane angle (deg, clockwise) and speed (deg/s)
+      var bob = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }; // small positional bounce (px)
+
+      /* ================= Pointer: mouse & touch ================= */
       var pointer = { x: 0, y: 0 };
-      var lastPointer = 0;
-      var touching = false;
-      var lastType = 'mouse';
+      var lastPointer = 0, touching = false, lastType = 'mouse';
+      var prevP = null;
+
+      function cardCenter() {
+        var r = card.getBoundingClientRect();
+        return toPage(r.left + r.width / 2, r.top + r.height / 2);
+      }
 
       function setPointer(e) {
         var p = toPage(e.clientX, e.clientY);
+        var now = performance.now();
+        // Flicking across the card spins it, like brushing a hanging card with your hand.
+        if (prevP && !reduced) {
+          var dt = (now - prevP.t) / 1000;
+          if (dt > 0.004 && dt < 0.1) {
+            var vx = (p[0] - prevP.x) / dt, vy = (p[1] - prevP.y) / dt;
+            var speed = Math.sqrt(vx * vx + vy * vy);
+            if (speed > 1.2) {
+              var c = cardCenter();
+              var rx = p[0] - c[0], ry = p[1] - c[1];
+              var near = Math.exp(-(rx * rx + ry * ry) / 0.25);
+              spin.v = clamp(spin.v + (rx * vy - ry * vx) * FLICK_GAIN * near * dt * 8, -1400, 1400);
+            }
+          }
+        }
+        prevP = { x: p[0], y: p[1], t: now };
         pointer.x = clamp(p[0], -1, 1);
         pointer.y = clamp(p[1], -1, 1);
-        lastPointer = performance.now();
+        lastPointer = now;
       }
       window.addEventListener('pointermove', function (e) {
         if (e.pointerType === 'mouse' && !canHover) return;
@@ -292,122 +327,195 @@
       window.addEventListener('pointerdown', function (e) {
         lastType = e.pointerType;
         if (e.target.closest && e.target.closest('a, button')) return;
+        prevP = null;
         if (e.pointerType !== 'mouse') touching = true;
         setPointer(e);
       }, { passive: true });
       function release(e) {
-        if (e.pointerType !== 'mouse') { touching = false; lastPointer = performance.now(); }
+        if (e.pointerType !== 'mouse') { touching = false; lastPointer = performance.now(); prevP = null; }
       }
       window.addEventListener('pointerup', release, { passive: true });
       window.addEventListener('pointercancel', release, { passive: true });
 
-      // Phone tilt: drives the light and the words, and nudges the card a little.
-      var tilt = { x: 0, y: 0, rawX: 0 };
-      var hasTilt = false;
-      var betaRest = null;
-      var upsideDown = false;
+      /* ================= Phone sensors ================= */
+      var S = {
+        up: { x: 0, y: 1, z: 0 },   // effective "up" in device axes (gravity + motion), in g
+        hasUp: false,
+        accSign: /iPhone|iPad|iPod/.test(navigator.userAgent) ? -1 : 1,  // platforms disagree; calibrated below
+        accVotes: 0,
+        rateSign: 1, rateVotes: 0, hasRate: false,
+        om: { x: 0, y: 0, z: 0 },   // device rotation rate (deg/s)
+        yaw: 0,                     // accumulated left/right turning (card frame, deg) -> lenticular loop
+        yawLeak: 0, pitchLeak: 0,   // recent turning, fades out -> light + slight card nudge
+        active: false
+      };
+      var upO = null, upOPrev = null, upOT = 0, lastAig = null;
+
+      // Feed a device rotation rate (deg/s, device axes) into the card: integrate turning,
+      // and let sudden changes in rotation make the card lag (it has inertia).
+      function feedRotation(ox, oy, oz, dt) {
+        var th = spin.a * DEG, c = Math.cos(th), s = Math.sin(th);
+        var cx = ox * c - oy * s;           // rate about the card's horizontal axis
+        var cy = ox * s + oy * c;           // rate about the card's vertical axis
+        var dcx = cx - (S.ocx || 0), dcy = cy - (S.ocy || 0), dz = oz - S.om.z;
+        S.ocx = cx; S.ocy = cy; S.om.x = ox; S.om.y = oy; S.om.z = oz;
+
+        S.yaw += cy * dt;
+        var leak = Math.exp(-dt / 1.1);
+        S.yawLeak = S.yawLeak * leak + cy * dt;
+        S.pitchLeak = S.pitchLeak * leak + cx * dt;
+
+        if (!reduced) {
+          spin.v = clamp(spin.v + dz * TWIST_COUPLE, -1400, 1400);
+          pose.vx += -dcy / TILT * TILT_COUPLE;
+          pose.vy += -dcx / (TILT * 1.25) * TILT_COUPLE;
+        }
+      }
+
+      window.addEventListener('devicemotion', function (e) {
+        var dt = e.interval ? (e.interval > 1 ? e.interval / 1000 : e.interval) : 0.016;
+        dt = clamp(dt, 0.004, 0.1);
+        var g = e.accelerationIncludingGravity;
+        if (g && g.x != null) {
+          S.active = true; btn.hidden = true;
+          lastAig = { x: g.x, y: g.y, z: g.z };
+          var k = S.accSign / 9.81;
+          var tx = g.x * k, ty = g.y * k, tz = g.z * k;
+          var f = S.hasUp ? 0.55 : 1;
+          S.up.x += (tx - S.up.x) * f; S.up.y += (ty - S.up.y) * f; S.up.z += (tz - S.up.z) * f;
+          S.hasUp = true;
+        }
+        var a = e.acceleration;
+        if (a && a.x != null && !reduced) {
+          var sg = S.accSign;
+          // Jolts: the card lags the phone a little (mostly toward/away from you).
+          bob.vx += -a.x * sg * BOUNCE_GAIN * dt;
+          bob.vy += a.y * sg * BOUNCE_GAIN * dt;
+          bob.vz += -a.z * sg * DEPTH_GAIN * dt;
+        }
+        var r = e.rotationRate;
+        if (r && r.alpha != null) {
+          S.hasRate = true;
+          var rs = S.rateSign;
+          S.rawRate = { x: r.beta, y: r.gamma, z: r.alpha };
+          feedRotation(r.beta * rs, r.gamma * rs, r.alpha * rs, dt);
+        }
+      });
 
       window.addEventListener('deviceorientation', function (e) {
-        if (e.gamma == null || e.beta == null) return;
-        if (!hasTilt) { hasTilt = true; btn.hidden = true; }
+        if (e.beta == null || e.gamma == null) return;
+        S.active = true; btn.hidden = true;
+        var b = e.beta * DEG, gm = e.gamma * DEG;
+        // "Up" in device axes from orientation (consistent across browsers).
+        upO = { x: -Math.sin(gm) * Math.cos(b), y: Math.sin(b), z: Math.cos(gm) * Math.cos(b) };
+        var now = performance.now();
 
-        // Held upside down (top of the phone pointing at the floor)?
-        var nowUpside = upsideDown ? (e.beta < -15 && e.beta > -165) : (e.beta < -35 && e.beta > -150);
-        if (nowUpside !== upsideDown) { upsideDown = nowUpside; betaRest = e.beta; }
+        if (!S.hasUp) { S.up.x = upO.x; S.up.y = upO.y; S.up.z = upO.z; }
 
-        if (betaRest === null) betaRest = e.beta;
-        betaRest += (e.beta - betaRest) * 0.004;   // "level" slowly follows how the phone is held
+        // Calibrate the accelerometer's sign convention against orientation.
+        if (lastAig) {
+          var mag = Math.sqrt(lastAig.x * lastAig.x + lastAig.y * lastAig.y + lastAig.z * lastAig.z);
+          if (mag > 7 && mag < 12.5) {
+            var d = (lastAig.x * upO.x + lastAig.y * upO.y + lastAig.z * upO.z) / mag;
+            if (Math.abs(d) > 0.6) {
+              S.accVotes = clamp(S.accVotes + (d > 0 ? 1 : -1), -20, 20);
+              if (Math.abs(S.accVotes) > 4) S.accSign = S.accVotes > 0 ? 1 : -1;
+            }
+          }
+        }
 
-        var sign = upsideDown ? -1 : 1;
-        tilt.rawX = sign * e.gamma / 40;           // unclamped, so the words keep cycling
-        tilt.x = clamp(tilt.rawX, -1, 1);
-        tilt.y = clamp(sign * (e.beta - betaRest) / 20, -1, 1);
+        if (upOPrev) {
+          var dt = clamp((now - upOT) / 1000, 0.004, 0.2);
+          if (S.hasRate && S.rawRate) {
+            // Calibrate the gyroscope's sign: a world-fixed "up" turns opposite to the phone.
+            var w = { x: S.rawRate.x * DEG, y: S.rawRate.y * DEG, z: S.rawRate.z * DEG };
+            var px = -(w.y * upOPrev.z - w.z * upOPrev.y), py = -(w.z * upOPrev.x - w.x * upOPrev.z), pz = -(w.x * upOPrev.y - w.y * upOPrev.x);
+            var ax = upO.x - upOPrev.x, ay = upO.y - upOPrev.y, az = upO.z - upOPrev.z;
+            var corr = px * ax + py * ay + pz * az;
+            if (Math.abs(corr) > 1e-4 / dt) {
+              S.rateVotes = clamp(S.rateVotes + (corr > 0 ? 1 : -1), -20, 20);
+              if (Math.abs(S.rateVotes) > 4) S.rateSign = S.rateVotes > 0 ? 1 : -1;
+            }
+          } else if (!S.hasRate) {
+            // No gyroscope: estimate turning from orientation changes instead.
+            var db = e.beta - S.prevBeta, dg = e.gamma - S.prevGamma;
+            if (Math.abs(db) < 60 && Math.abs(dg) < 60) feedRotation(db / dt, dg / dt, 0, dt);
+          }
+        }
+        S.prevBeta = e.beta; S.prevGamma = e.gamma;
+        upOPrev = upO; upOT = now;
       });
 
-      // Shakes: the card has inertia, so a jolt of the phone throws it the other way.
-      var gPrev = null;
-      window.addEventListener('devicemotion', function (e) {
-        var a = e.acceleration;
-        var ax, ay;
-        if (a && a.x != null) { ax = a.x; ay = a.y; }
-        else if (e.accelerationIncludingGravity && e.accelerationIncludingGravity.x != null) {
-          var g = e.accelerationIncludingGravity;
-          if (!gPrev) gPrev = { x: g.x, y: g.y };
-          gPrev.x += (g.x - gPrev.x) * 0.1; gPrev.y += (g.y - gPrev.y) * 0.1;
-          ax = g.x - gPrev.x; ay = g.y - gPrev.y;
-        } else return;
-        var mag = Math.sqrt(ax * ax + ay * ay);
-        if (mag < 1.2 || reduced) return;            // ignore hand tremor
-        var s = upsideDown ? -1 : 1;
-        var dt = (e.interval ? (e.interval > 1 ? e.interval / 1000 : e.interval) : 0.016);
-        shake.vx += -s * ax * 2200 * dt;
-        shake.vy += s * ay * 2200 * dt;
-        spin.v += s * ax * 320 * dt;
-        pose.vx += -s * ax * 6 * dt;
-        pose.vy += s * ay * 6 * dt;
-      });
-
-      // iOS needs a tap before it shares motion data. Only ask if it isn't already coming through.
+      // iOS needs a tap before sharing motion data. Only ask if nothing is coming through yet.
       var DOE = window.DeviceOrientationEvent, DME = window.DeviceMotionEvent;
-      if (DOE && typeof DOE.requestPermission === 'function' && 'ontouchstart' in window) {
-        setTimeout(function () { if (!hasTilt) btn.hidden = false; }, 1200);
+      var needsAsk = (DOE && typeof DOE.requestPermission === 'function') || (DME && typeof DME.requestPermission === 'function');
+      if (needsAsk && 'ontouchstart' in window) {
+        setTimeout(function () { if (!S.active) btn.hidden = false; }, 1200);
         btn.addEventListener('click', function () {
-          var asks = [DOE.requestPermission()];
-          if (DME && typeof DME.requestPermission === 'function') asks.push(DME.requestPermission());
+          var asks = [];
+          if (DME && DME.requestPermission) asks.push(DME.requestPermission());
+          if (DOE && DOE.requestPermission) asks.push(DOE.requestPermission());
           Promise.all(asks).then(function (res) {
-            if (res[0] === 'granted') btn.hidden = true;
+            if (res.indexOf('granted') !== -1) btn.hidden = true;
           }).catch(function () {});
         });
       }
 
-      /* ---------- Physics: damped springs ---------- */
-      // pose: card tilt (-1..1), shake: card offset (px), spin: in-plane wobble (deg), flip: upside-down turn (deg)
-      var pose = { x: 0, y: 0, vx: 0, vy: 0 };
-      var shake = { x: 0, y: 0, vx: 0, vy: 0 };
-      var spin = { a: 0, v: 0 };
-      var flip = { a: 0, v: 0 };
-      var tiltFx = { x: 0, y: 0, rawX: 0 };
-
+      /* ================= Physics ================= */
       function spring(pos, vel, target, k, zeta, dt) {
         var c = 2 * zeta * Math.sqrt(k);
         vel += (k * (target - pos) - c * vel) * dt;
-        pos += vel * dt;
-        return [pos, vel];
+        return [pos + vel * dt, vel];
       }
 
       function step(dt) {
-        var z = reduced ? 1 : 0.5;
-        var tx = pointer.x + (hasTilt ? tilt.x * PHONE_NUDGE : 0);
-        var ty = pointer.y + (hasTilt ? tilt.y * PHONE_NUDGE : 0);
-        var r = spring(pose.x, pose.vx, tx, 70, z, dt); pose.x = r[0]; pose.vx = r[1];
-        r = spring(pose.y, pose.vy, ty, 70, z, dt); pose.y = r[0]; pose.vy = r[1];
+        // 1) In-plane: the card hangs like a pendulum toward "up" (gravity plus any jolts),
+        //    so rolling the phone keeps it level, flipping the phone swings it over,
+        //    and shakes set it spinning.
+        var ex = 0, ey = 1;
+        if (S.hasUp) { ex = S.up.x; ey = S.up.y; }
+        var m = Math.sqrt(ex * ex + ey * ey);
+        var phi = Math.atan2(ex, ey) / DEG;
+        var diff = spin.a - phi;
+        var torque = -PEND_W2 * Math.min(m, 3) * Math.sin(diff * DEG) / DEG;
+        if (Math.abs(diff % 360) > 179 && Math.abs(spin.v) < 5) torque += 40; // never balance upside down
+        var damp = reduced ? 12 : PIVOT_DAMP;
+        spin.v += (torque - damp * spin.v) * dt;
+        spin.a += spin.v * dt;
+        if (spin.a > 720 || spin.a < -720) spin.a = spin.a % 360;
 
-        r = spring(shake.x, shake.vx, 0, 160, 0.16, dt); shake.x = clamp(r[0], -70, 70); shake.vx = r[1];
-        r = spring(shake.y, shake.vy, 0, 160, 0.16, dt); shake.y = clamp(r[0], -70, 70); shake.vy = r[1];
-        r = spring(spin.a, spin.v, 0, 120, 0.14, dt); spin.a = clamp(r[0], -28, 28); spin.v = r[1];
-        r = spring(flip.a, flip.v, upsideDown ? 180 : 0, 38, reduced ? 1 : 0.42, dt); flip.a = r[0]; flip.v = r[1];
+        // 2) 3D tilt: follows the pointer (rotated into the card's frame), plus a slight nudge
+        //    from recent phone turning, with springy momentum.
+        var th = spin.a * DEG, c = Math.cos(th), s = Math.sin(th);
+        var px = pointer.x * c + pointer.y * s;
+        var py = -pointer.x * s + pointer.y * c;
+        var tx = px + clamp(S.yawLeak / 30, -1, 1) * 0.3;
+        var ty = py + clamp(S.pitchLeak / 25, -1, 1) * 0.3;
+        var z = reduced ? 1 : 0.45;
+        var r = spring(pose.x, pose.vx, tx, 70, z, dt); pose.x = clamp(r[0], -1.6, 1.6); pose.vx = r[1];
+        r = spring(pose.y, pose.vy, ty, 70, z, dt); pose.y = clamp(r[0], -1.6, 1.6); pose.vy = r[1];
 
-        var f = 1 - Math.exp(-dt * 8);
-        tiltFx.x += ((hasTilt ? tilt.x : 0) - tiltFx.x) * f;
-        tiltFx.y += ((hasTilt ? tilt.y : 0) - tiltFx.y) * f;
-        tiltFx.rawX += ((hasTilt ? tilt.rawX : 0) - tiltFx.rawX) * f;
+        // 3) Small bounce from jolts.
+        r = spring(bob.x, bob.vx, 0, 220, 0.3, dt); bob.x = clamp(r[0], -12, 12); bob.vx = r[1];
+        r = spring(bob.y, bob.vy, 0, 220, 0.3, dt); bob.y = clamp(r[0], -12, 12); bob.vy = r[1];
+        r = spring(bob.z, bob.vz, 0, 160, 0.28, dt); bob.z = clamp(r[0], -60, 60); bob.vz = r[1];
       }
 
-      /* ---------- Rendering ---------- */
+      /* ================= Rendering ================= */
       var lastTop = -1;
 
       function render() {
-        var lift = Math.sin(flip.a * Math.PI / 180) * 32;   // the card arcs toward you while flipping
+        // A fast-spinning card lifts toward you a little.
+        var lift = Math.min(Math.abs(spin.v) * 0.035, 40);
         card.style.transform =
-          'translate3d(' + shake.x.toFixed(1) + 'px,' + (shake.y + pose.y * 28).toFixed(1) + 'px,0) ' +
-          'rotateZ(' + (flip.a + spin.a).toFixed(2) + 'deg) ' +
-          'rotateX(' + lift.toFixed(2) + 'deg) ' +
+          'translate3d(' + bob.x.toFixed(1) + 'px,' + (bob.y + pose.y * 18).toFixed(1) + 'px,' + (bob.z + lift).toFixed(1) + 'px) ' +
+          'rotateZ(' + spin.a.toFixed(2) + 'deg) ' +
           'rotateY(' + (pose.x * TILT).toFixed(2) + 'deg) ' +
           'rotateX(' + (-pose.y * TILT * 1.25).toFixed(2) + 'deg)';
 
-        // Light follows the card pose plus phone tilt.
-        var x = clamp(pose.x + tiltFx.x, -1, 1);
-        var y = clamp(pose.y + tiltFx.y, -1, 1);
+        // Light (in the card's frame): follows the card's tilt and recent phone turning.
+        var x = clamp(pose.x + S.yawLeak / 35, -1, 1);
+        var y = clamp(pose.y + S.pitchLeak / 30, -1, 1);
 
         sheen.style.backgroundImage = 'linear-gradient(' + (105 + y * 35).toFixed(1) + 'deg, transparent 40%, rgba(255,255,255,' +
           (0.07 + Math.abs(y) * 0.06).toFixed(3) + ') 50%, transparent 60%)';
@@ -422,8 +530,12 @@
 
         app.style.backgroundPosition = '0 ' + (y * 6).toFixed(2) + 'px';
 
-        // Lenticular words sit on a loop: ByteBrew -> App -> Studios -> ByteBrew ...
-        var phase = 1 / 3 + (pose.x + tiltFx.rawX) * (2 / 3);
+        // Lenticular words on a loop: ByteBrew -> App -> Studios -> ByteBrew ...
+        // On phones the viewing angle is the phone's turn plus the card's own tilt (in degrees);
+        // with a mouse, the card's tilt alone sweeps the words.
+        var phase = S.active
+          ? 1 / 3 + (S.yaw + pose.x * TILT) / YAW_PER_LOOP + pointer.x * 0.25
+          : 1 / 3 + pose.x * (2 / 3);
         phase = phase - Math.floor(phase);
         var w = [0, 1 / 3, 2 / 3].map(function (c) {
           var d = Math.abs(phase - c); d = Math.min(d, 1 - d);
@@ -455,20 +567,22 @@
         lastNow = now;
 
         var touchMode = !canHover || lastType !== 'mouse';
-        if (touchMode && !touching && now - lastPointer > 3000 && (hasTilt || reduced)) {
-          // On phones, a few seconds after the finger lifts the card settles back to centre.
+        if (touchMode && !touching && now - lastPointer > 3000 && (S.active || reduced)) {
+          // On phones, a few seconds after the finger lifts the card settles back.
           pointer.x = 0; pointer.y = 0;
-        } else if (!reduced && !hasTilt && !touching && now - lastPointer > 2500) {
-          // With no input at all, drift gently so the card never looks frozen.
+        } else if (!reduced && !S.active && !touching && now - lastPointer > 2500) {
+          // No input at all: drift gently so the card never looks frozen.
           pointer.x = Math.sin(now * 0.00028) * 0.9;
           pointer.y = Math.sin(now * 0.00023 + 1) * 0.6;
         }
 
-        // Two sub-steps keep the springs stable at low frame rates.
-        step(dt / 2); step(dt / 2);
+        // Without sensor events, let recent-turn values fade on their own.
+        if (!S.active) { S.yawLeak *= 0.98; S.pitchLeak *= 0.98; }
 
-        var key = [pose.x, pose.y, shake.x, shake.y, spin.a, flip.a, tiltFx.x, tiltFx.y, tiltFx.rawX]
-          .map(function (v) { return v.toFixed(3); }).join(',');
+        for (var i = 0; i < 4; i++) step(dt / 4);
+
+        var key = [pose.x, pose.y, spin.a, bob.x, bob.y, bob.z, S.yaw, S.yawLeak, S.pitchLeak]
+          .map(function (v) { return v.toFixed(2); }).join(',');
         if (key !== lastKey) { lastKey = key; render(); }
         requestAnimationFrame(tick);
       }
