@@ -221,12 +221,18 @@
       var PERIOD = 9;           // lenticular strip width (px)
       var YAW_PER_LOOP = 100;   // degrees of turning the phone for one full ByteBrew -> App -> Studios loop
 
-      var PEND_W2 = 30;         // pendulum stiffness (rad/s^2): how strongly the card hangs "upright"
-      var PIVOT_DAMP = 1.5;     // pivot friction (1/s): how fast swings and spins die down
-      var TWIST_COUPLE = 0.9;   // how much a quick in-plane twist of the phone is felt by the card
-      var TILT_COUPLE = 0.6;    // how much quick forward/back/side tilts make the card lag in 3D
-      var BOUNCE_GAIN = 200;    // lateral bounce from jolts (kept small on purpose)
-      var DEPTH_GAIN = 500;     // toward/away bounce from jolts
+      var SPIN_K = 90;          // spring holding the card's angle (higher = snappier)
+      var SPIN_ZETA = 0.38;     // damping: a little overshoot, then it settles
+      var LEAN = 0.12;          // how much the card leans with small rolls of the phone
+      var LEAN_MAX = 5;         // max lean (deg) before it snaps to the next quarter turn
+      var SNAP_AT = 60;         // roll past a quarter turn by this many degrees to snap over
+      var SHAKE_SPIN = 150;     // wobble from a shake
+      var SHAKE_MIN = 2.5;      // m/s^2: ignore ordinary hand movement
+      var TWIST_COUPLE = 0.35;  // momentary lag when the phone is twisted quickly
+      var TILT_COUPLE = 0.12;   // momentary 3D lag when the phone is tilted quickly
+      var NUDGE = 0.06;         // how much ordinary tilting moves the card itself (keep tiny)
+      var BOUNCE_GAIN = 90;     // lateral bounce from jolts (kept small on purpose)
+      var DEPTH_GAIN = 260;     // toward/away bounce from jolts
       var FLICK_GAIN = 380;     // spin from flicking across the card with a finger or mouse
 
       var root = document.documentElement;
@@ -286,6 +292,7 @@
       /* ================= Card state ================= */
       var pose = { x: 0, y: 0, vx: 0, vy: 0 };          // 3D tilt of the card in its own frame (-1..1)
       var spin = { a: 0, v: 0 };                         // in-plane angle (deg, clockwise) and speed (deg/s)
+      var snapAngle = 0, lean = 0;
       var bob = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 }; // small positional bounce (px)
 
       /* ================= Pointer: mouse & touch ================= */
@@ -361,14 +368,15 @@
         S.ocx = cx; S.ocy = cy; S.om.x = ox; S.om.y = oy; S.om.z = oz;
 
         S.yaw += cy * dt;
-        var leak = Math.exp(-dt / 1.1);
+        var leak = Math.exp(-dt / 2.5);
         S.yawLeak = S.yawLeak * leak + cy * dt;
         S.pitchLeak = S.pitchLeak * leak + cx * dt;
 
         if (!reduced) {
-          spin.v = clamp(spin.v + dz * TWIST_COUPLE, -1400, 1400);
-          pose.vx += -dcy / TILT * TILT_COUPLE;
-          pose.vy += -dcx / (TILT * 1.25) * TILT_COUPLE;
+          // Only sudden changes register, so ordinary handling leaves the card still.
+          if (Math.abs(dz) > 40) spin.v = clamp(spin.v + dz * TWIST_COUPLE, -600, 600);
+          if (Math.abs(dcy) > 40) pose.vx += -dcy / TILT * TILT_COUPLE;
+          if (Math.abs(dcx) > 40) pose.vy += -dcx / (TILT * 1.25) * TILT_COUPLE;
         }
       }
 
@@ -388,10 +396,15 @@
         var a = e.acceleration;
         if (a && a.x != null && !reduced) {
           var sg = S.accSign;
-          // Jolts: the card lags the phone a little (mostly toward/away from you).
-          bob.vx += -a.x * sg * BOUNCE_GAIN * dt;
-          bob.vy += a.y * sg * BOUNCE_GAIN * dt;
-          bob.vz += -a.z * sg * DEPTH_GAIN * dt;
+          var amag = Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+          if (amag > SHAKE_MIN) {
+            // A shake makes the card wobble around its centre, then settle,
+            // with a small bounce (mostly toward/away from you).
+            spin.v = clamp(spin.v + (-a.x * sg) * SHAKE_SPIN * dt, -600, 600);
+            bob.vx += -a.x * sg * BOUNCE_GAIN * dt;
+            bob.vy += a.y * sg * BOUNCE_GAIN * dt;
+            bob.vz += -a.z * sg * DEPTH_GAIN * dt;
+          }
         }
         var r = e.rotationRate;
         if (r && r.alpha != null) {
@@ -469,19 +482,22 @@
       }
 
       function step(dt) {
-        // 1) In-plane: the card hangs like a pendulum toward "up" (gravity plus any jolts),
-        //    so rolling the phone keeps it level, flipping the phone swings it over,
-        //    and shakes set it spinning.
-        var ex = 0, ey = 1;
-        if (S.hasUp) { ex = S.up.x; ey = S.up.y; }
-        var m = Math.sqrt(ex * ex + ey * ey);
-        var phi = Math.atan2(ex, ey) / DEG;
-        var diff = spin.a - phi;
-        var torque = -PEND_W2 * Math.min(m, 3) * Math.sin(diff * DEG) / DEG;
-        if (Math.abs(diff % 360) > 179 && Math.abs(spin.v) < 5) torque += 40; // never balance upside down
-        var damp = reduced ? 12 : PIVOT_DAMP;
-        spin.v += (torque - damp * spin.v) * dt;
-        spin.a += spin.v * dt;
+        // 1) In-plane: the card stays put, leaning only slightly as the phone rolls.
+        //    Roll the phone past a quarter turn and it springs round to the nearest 90 degrees.
+        if (S.hasUp) {
+          var ex = S.up.x, ey = S.up.y;
+          if (ex * ex + ey * ey > 0.25) {            // ignore when the phone is lying nearly flat
+            var phi = Math.atan2(ex, ey) / DEG;
+            var off = ((phi - snapAngle) % 360 + 540) % 360 - 180;
+            if (Math.abs(off) > 45 + (SNAP_AT - 45)) snapAngle = Math.round(phi / 90) * 90;
+            off = ((phi - snapAngle) % 360 + 540) % 360 - 180;
+            lean = clamp(off * LEAN, -LEAN_MAX, LEAN_MAX);
+          }
+        }
+        var goal = snapAngle + lean;
+        goal += 360 * Math.round((spin.a - goal) / 360);   // turn the short way round
+        var zr = reduced ? 1 : SPIN_ZETA;
+        var rr = spring(spin.a, spin.v, goal, SPIN_K, zr, dt); spin.a = rr[0]; spin.v = rr[1];
         if (spin.a > 720 || spin.a < -720) spin.a = spin.a % 360;
 
         // 2) 3D tilt: follows the pointer (rotated into the card's frame), plus a slight nudge
@@ -489,8 +505,8 @@
         var th = spin.a * DEG, c = Math.cos(th), s = Math.sin(th);
         var px = pointer.x * c + pointer.y * s;
         var py = -pointer.x * s + pointer.y * c;
-        var tx = px + clamp(S.yawLeak / 30, -1, 1) * 0.3;
-        var ty = py + clamp(S.pitchLeak / 25, -1, 1) * 0.3;
+        var tx = px + clamp(S.yawLeak / 30, -1, 1) * NUDGE;
+        var ty = py + clamp(S.pitchLeak / 25, -1, 1) * NUDGE;
         var z = reduced ? 1 : 0.45;
         var r = spring(pose.x, pose.vx, tx, 70, z, dt); pose.x = clamp(r[0], -1.6, 1.6); pose.vx = r[1];
         r = spring(pose.y, pose.vy, ty, 70, z, dt); pose.y = clamp(r[0], -1.6, 1.6); pose.vy = r[1];
@@ -505,8 +521,8 @@
       var lastTop = -1;
 
       function render() {
-        // A fast-spinning card lifts toward you a little.
-        var lift = Math.min(Math.abs(spin.v) * 0.035, 40);
+        // A card in motion lifts toward you a touch.
+        var lift = Math.min(Math.abs(spin.v) * 0.03, 24);
         card.style.transform =
           'translate3d(' + bob.x.toFixed(1) + 'px,' + (bob.y + pose.y * 18).toFixed(1) + 'px,' + (bob.z + lift).toFixed(1) + 'px) ' +
           'rotateZ(' + spin.a.toFixed(2) + 'deg) ' +
@@ -514,8 +530,8 @@
           'rotateX(' + (-pose.y * TILT * 1.25).toFixed(2) + 'deg)';
 
         // Light (in the card's frame): follows the card's tilt and recent phone turning.
-        var x = clamp(pose.x + S.yawLeak / 35, -1, 1);
-        var y = clamp(pose.y + S.pitchLeak / 30, -1, 1);
+        var x = clamp(pose.x + S.yawLeak / 22, -1, 1);
+        var y = clamp(pose.y + S.pitchLeak / 18, -1, 1);
 
         sheen.style.backgroundImage = 'linear-gradient(' + (105 + y * 35).toFixed(1) + 'deg, transparent 40%, rgba(255,255,255,' +
           (0.07 + Math.abs(y) * 0.06).toFixed(3) + ') 50%, transparent 60%)';
