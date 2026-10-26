@@ -294,6 +294,7 @@
       var snapAngle = 0;        // the quarter turn the phone is in now
       var shownSnap = 0;        // the quarter turn the card is heading for (follows after a short beat)
       var snapChangedAt = 0;
+      var side = { prev: null, acc: 0, rest: 0, elRest: 0, snap: -1 };   // sideways tilt tracking
       var SNAP_LAG = 150;       // ms: the card "notices" the phone turned, then catches up
       var turn = { a: 0, v: 0 };
 
@@ -365,6 +366,36 @@
         betaRest += (e.beta - betaRest) * 0.004;
         // Tilt in the card's own frame, so it still makes sense after the card has turned.
         var c = Math.round(Math.cos(snapAngle * DEG)), sn = Math.round(Math.sin(snapAngle * DEG));
+
+        if (sn !== 0 && e.alpha != null) {
+          // Sideways: beta/gamma become unreliable near 90 degrees (gimbal lock), so measure the turn
+          // from the phone's full 3D orientation instead: how far the card's horizontal edge has swung
+          // around the vertical (left/right turn) and how far the screen has tipped up or down.
+          var al = e.alpha * DEG, ca = Math.cos(al), sa = Math.sin(al);
+          var cb = Math.cos(b), sb = Math.sin(b), cg = Math.cos(g), sg = Math.sin(g);
+          var X = [cg * ca - sg * sb * sa, cg * sa + sg * sb * ca, -sg * cb];   // device x in world
+          var Y = [-cb * sa, cb * ca, sb];                                     // device y in world
+          var Nz = cg * cb;                                                    // screen normal, vertical part
+          var th = snapAngle * DEG;
+          var rx = Math.cos(th) * X[0] - Math.sin(th) * Y[0];                  // card's horizontal edge in world
+          var ry = Math.cos(th) * X[1] - Math.sin(th) * Y[1];
+          var hr = Math.atan2(ry, rx) / DEG;
+          var el = Math.asin(clamp(Nz, -1, 1)) / DEG;
+          if (side.prev === null || side.snap !== snapAngle) {
+            side.prev = hr; side.acc = 0; side.rest = 0; side.elRest = el; side.snap = snapAngle;
+          }
+          side.acc += ((hr - side.prev) % 360 + 540) % 360 - 180;            // unwrapped, so it can keep turning
+          side.prev = hr;
+          side.rest += (side.acc - side.rest) * 0.004;                         // "straight on" slowly follows you
+          side.elRest += (el - side.elRest) * 0.004;
+          var turnDeg = side.acc - side.rest, tipDeg = -(el - side.elRest);
+          tilt.x = clamp(turnDeg / 25, -1, 1);
+          tilt.rawX = turnDeg / 40;
+          tilt.y = clamp(tipDeg / 20, -1, 1);
+          return;
+        }
+        side.prev = null;
+
         var gx = e.gamma / 25, by = (e.beta - betaRest) / 20;
         tilt.x = clamp(gx * c + by * sn, -1, 1);
         tilt.rawX = (e.gamma / 40) * c + by * 0.5 * sn;
