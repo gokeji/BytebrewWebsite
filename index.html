@@ -342,7 +342,24 @@
         if (e.target.closest && e.target.closest('a, button')) return;
         if (e.pointerType !== 'mouse') touching = true;
         setPointer(e);
+        if (e.pointerType === 'mouse') knock(e);
       }, { passive: true });
+
+      // Clicking the card on desktop knocks it, like a shake on a phone: the spot you click
+      // is pushed away, so it rocks around that side, dips in a touch, then rings out.
+      function knock(e) {
+        if (reduced) return;
+        var r = card.getBoundingClientRect();
+        var rx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
+        var ry = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+        if (Math.abs(rx) > 1.15 || Math.abs(ry) > 1.25) return;   // only clicks on (or right at) the card
+        rx = clamp(rx, -1, 1); ry = clamp(ry, -1, 1);
+        var nudge = Math.abs(rx) < 0.2 ? (rx < 0 ? -0.35 : 0.35) : 0;  // a centre click still rocks a little
+        wob.vy = clamp(wob.vy + (rx + nudge) * 340, -700, 700);
+        wob.vx = clamp(wob.vx - ry * 260, -450, 450);
+        wob.vz = clamp(wob.vz + rx * (ry < 0 ? -1 : 1) * 70, -350, 350);
+        bob.vz -= 170;
+      }
       function release(e) {
         if (e.pointerType !== 'mouse') {
           touching = false;
