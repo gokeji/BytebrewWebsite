@@ -327,9 +327,9 @@
         var cxA = ax * c - ay * sn, cyA = ax * sn + ay * c;
         // The card lags the jolt by a hair (tiny shift, mostly depth), then rocks on all three axes.
         bob.vx += -ax * 45 * dt; bob.vy += ay * 45 * dt; bob.vz += -az * 150 * dt;
-        wob.vy = clamp(wob.vy - cxA * 380 * dt, -700, 700);
-        wob.vz = clamp(wob.vz + cxA * 180 * dt, -350, 350);
-        wob.vx = clamp(wob.vx + (cyA * 220 + az * 140) * dt, -450, 450);
+        wob.vy = clamp(wob.vy - cxA * 620 * dt, -1300, 1300);
+        wob.vz = clamp(wob.vz + cxA * 300 * dt, -650, 650);
+        wob.vx = clamp(wob.vx + (cyA * 360 + az * 220) * dt, -800, 800);
       });
       window.addEventListener('pointermove', function (e) {
         if (e.pointerType === 'mouse' && !canHover) return;
@@ -342,7 +342,7 @@
         if (e.target.closest && e.target.closest('a, button')) return;
         if (e.pointerType !== 'mouse') touching = true;
         setPointer(e);
-        if (e.pointerType === 'mouse') knock(e);
+        knock(e);   // a click (desktop) or tap (phone) on the card shakes it
       }, { passive: true });
 
       // Clicking the card on desktop knocks it, like a shake on a phone: the spot you click
@@ -355,9 +355,9 @@
         if (Math.abs(rx) > 1.15 || Math.abs(ry) > 1.25) return;   // only clicks on (or right at) the card
         rx = clamp(rx, -1, 1); ry = clamp(ry, -1, 1);
         var nudge = Math.abs(rx) < 0.2 ? (rx < 0 ? -0.35 : 0.35) : 0;  // a centre click still rocks a little
-        wob.vy = clamp(wob.vy + (rx + nudge) * 340, -700, 700);
-        wob.vx = clamp(wob.vx - ry * 260, -450, 450);
-        wob.vz = clamp(wob.vz + rx * (ry < 0 ? -1 : 1) * 70, -350, 350);
+        wob.vy = clamp(wob.vy + (rx + nudge) * 520, -1300, 1300);
+        wob.vx = clamp(wob.vx - ry * 400, -800, 800);
+        wob.vz = clamp(wob.vz + rx * (ry < 0 ? -1 : 1) * 160, -650, 650);
         bob.vz -= 170;
       }
       function release(e) {
@@ -510,14 +510,13 @@
           turn.v += (kz * (goal - turn.a) - cz * turn.v) * h;
           turn.a += turn.v * h;
         }
-        // Wobble spring: loose, so it rocks a few times before settling.
-        for (var j = 0; j < 2; j++) {
-          var hh = dt / 2;
-          // ~0.5 s period, lightly damped so it rings out naturally (~1 s). Each axis has a slightly different stiffness and
-          // damping so they settle at different moments (follow-through), which reads as alive.
-          wob.vy += (-150 * wob.y - 2 * 0.27 * Math.sqrt(150) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -24, 24);
-          wob.vz += (-200 * wob.z - 2 * 0.31 * Math.sqrt(200) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -10, 10);
-          wob.vx += (-175 * wob.x - 2 * 0.35 * Math.sqrt(175) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -14, 14);
+        // Shake spring: stiff and very lightly damped, so it rattles fast (~0.28 s per rock)
+        // and rings out over about a second. Each axis is slightly detuned so they don't move in lockstep.
+        for (var j = 0; j < 4; j++) {
+          var hh = dt / 4;
+          wob.vy += (-500 * wob.y - 2 * 0.085 * Math.sqrt(500) * wob.vy) * hh; wob.y = clamp(wob.y + wob.vy * hh, -30, 30);
+          wob.vz += (-580 * wob.z - 2 * 0.095 * Math.sqrt(580) * wob.vz) * hh; wob.z = clamp(wob.z + wob.vz * hh, -14, 14);
+          wob.vx += (-540 * wob.x - 2 * 0.1 * Math.sqrt(540) * wob.vx) * hh; wob.x = clamp(wob.x + wob.vx * hh, -18, 18);
           // Positional lag: stiffer and better damped, so it leads and the rotation follows.
           bob.vx += (-300 * bob.x - 2 * 0.45 * Math.sqrt(300) * bob.vx) * hh; bob.x = clamp(bob.x + bob.vx * hh, -4, 4);
           bob.vy += (-300 * bob.y - 2 * 0.45 * Math.sqrt(300) * bob.vy) * hh; bob.y = clamp(bob.y + bob.vy * hh, -4, 4);
