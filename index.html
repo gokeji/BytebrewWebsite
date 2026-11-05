@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#070708">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,900&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,900&family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -258,33 +258,33 @@
       flex-direction: column;
       gap: 36px;
     }
-    .works-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-    .works-kicker { display: block; font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase; color: #C9A27A; margin-bottom: 8px; }
+    .works-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .works-title { margin: 0; display: flex; align-items: baseline; gap: 12px; font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-weight: 900; font-size: clamp(40px, 9vw, 48px); line-height: 1; letter-spacing: -0.03em; color: #EDEBE6; }
     .works-count { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-style: normal; font-weight: 400; font-size: 10px; letter-spacing: 0.2em; color: #8C8C91; }
     .back-btn {
-      display: flex; align-items: center; gap: 7px; min-height: 44px; margin-top: -8px; padding: 0;
+      display: flex; align-items: center; gap: 7px; min-height: 44px; padding: 0;
       background: transparent; border: 0; font-family: inherit; font-size: 9px; letter-spacing: 0.22em;
       text-transform: uppercase; color: #8C8C91; cursor: pointer; white-space: nowrap;
     }
     .back-btn:hover, .back-btn:focus-visible { color: #EDEBE6; }
+    /* Each row: the app on the left, its platform icons right-aligned in a fixed order
+       (Apple, Android, Web) however many it has, like a store's platform row. */
     .works-list { list-style: none; margin: 0; padding: 0; }
     .work {
-      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
-      gap: 2px 16px; padding: 14px 0; border-top: 1px solid #1F1F24;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start;
+      column-gap: 16px; padding: 18px 0; border-top: 1px solid #1F1F24;
     }
     .work:last-child { border-bottom: 1px solid #1F1F24; }
-    .work-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 5px; color: #EDEBE6; }
-    .work-name { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-weight: 900; font-size: 24px; letter-spacing: -0.02em; }
+    .work-main { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding-top: 4px; color: #EDEBE6; }
+    .work-name { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-weight: 300; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; }
     .work-desc { font-size: 10px; letter-spacing: 0.05em; color: #8C8C91; }
-    .work-links { display: flex; gap: 2px; margin-left: -2px; }
-    .work-links a { display: flex; align-items: center; min-height: 44px; padding: 0 2px; color: #8C8C91; }
-    .work-links a > span {
-      display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
-      border: 1px solid #26262B; border-radius: 13px; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
-      transition: color .3s, border-color .3s;
+    .work-links { display: flex; justify-content: flex-end; margin-right: -8px; }
+    /* Icon-only platform links; the negative margin above puts the last glyph on the row's right edge. */
+    .work-links a {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 36px; color: #8C8C91; transition: color .3s;
     }
-    .work-links a:hover > span, .work-links a:focus-visible > span { color: #EDEBE6; border-color: #4A4A52; }
+    .work-links a:hover, .work-links a:focus-visible { color: #EDEBE6; }
     .works-foot { display: flex; justify-content: space-between; gap: 16px; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #5E5E63; }
   </style>
 </head>
@@ -328,10 +328,7 @@
     <div class="works-scroll">
       <div class="works-inner">
         <div class="works-head">
-          <div>
-            <span class="works-kicker">ByteBrew — Launched</span>
-            <h2 class="works-title" id="works-title">Works <span class="works-count">3</span></h2>
-          </div>
+          <h2 class="works-title" id="works-title">Works <span class="works-count">3</span></h2>
           <button type="button" class="back-btn" id="back-btn">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><path d="M10 6a4 4 0 1 1-1.2-2.85"></path><path d="M10 1.5v2.2H7.8"></path></svg>
             Turn back
@@ -341,20 +338,20 @@
           <li class="work">
             <a class="work-main" href="https://apps.apple.com/us/app/id6480327824"><span class="work-name">Minimal</span><span class="work-desc">Distraction-free app launcher</span></a>
             <span class="work-links">
-              <a href="https://apps.apple.com/us/app/id6480327824" title="App Store"><span><svg width="9" height="13" viewBox="0 0 9 13" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><rect x="0.5" y="0.5" width="8" height="12" rx="1.8"></rect><path d="M3.3 10.6h2.4"></path></svg>iOS</span></a>
+              <a href="https://apps.apple.com/us/app/id6480327824" class="p-ios" title="App Store" aria-label="App Store"><svg width="14" height="16" viewBox="0 0 13.5 15.5" fill="currentColor" aria-hidden="true"><path d="M7.2 3.3C7.2 1.9 8.2.7 9.6.5c.1 1.4-1 2.7-2.4 2.8Z"></path><path d="M7 4.5c-1.2 0-2-.7-3.2-.7C2 3.8.5 5.4.5 8c0 3.3 2.1 7 3.8 7 1 0 1.5-.6 2.7-.6s1.6.6 2.7.6c1.3 0 2.7-2.1 3.3-3.8-1.4-.7-2.2-1.9-2.2-3.4 0-1.3.6-2.3 1.6-2.9-.7-.8-1.7-1.1-2.5-1.1-1 0-1.7.7-2.9.7Z"></path></svg></a>
             </span>
           </li>
           <li class="work">
             <a class="work-main" href="https://apps.apple.com/us/app/id6472882122"><span class="work-name">Turn Timer</span><span class="work-desc">Simplest Rummikub timer</span></a>
             <span class="work-links">
-              <a href="https://apps.apple.com/us/app/id6472882122" title="App Store"><span><svg width="9" height="13" viewBox="0 0 9 13" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><rect x="0.5" y="0.5" width="8" height="12" rx="1.8"></rect><path d="M3.3 10.6h2.4"></path></svg>iOS</span></a>
-              <a href="https://play.google.com/store/apps/details?id=xyz.bytebrew.turnTimer" title="Google Play"><span><svg width="9" height="13" viewBox="0 0 9 13" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><rect x="0.5" y="0.5" width="8" height="12" rx="1.8"></rect><path d="M3.3 10.6h2.4"></path></svg>Android</span></a>
+              <a href="https://apps.apple.com/us/app/id6472882122" class="p-ios" title="App Store" aria-label="App Store"><svg width="14" height="16" viewBox="0 0 13.5 15.5" fill="currentColor" aria-hidden="true"><path d="M7.2 3.3C7.2 1.9 8.2.7 9.6.5c.1 1.4-1 2.7-2.4 2.8Z"></path><path d="M7 4.5c-1.2 0-2-.7-3.2-.7C2 3.8.5 5.4.5 8c0 3.3 2.1 7 3.8 7 1 0 1.5-.6 2.7-.6s1.6.6 2.7.6c1.3 0 2.7-2.1 3.3-3.8-1.4-.7-2.2-1.9-2.2-3.4 0-1.3.6-2.3 1.6-2.9-.7-.8-1.7-1.1-2.5-1.1-1 0-1.7.7-2.9.7Z"></path></svg></a>
+              <a href="https://play.google.com/store/apps/details?id=xyz.bytebrew.turnTimer" class="p-android" title="Google Play" aria-label="Google Play"><svg width="14" height="16" viewBox="0 0 14 16" fill="currentColor" aria-hidden="true"><path d="M5 2.6 4 1M9 2.6l1-1.6" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"></path><path fill-rule="evenodd" d="M2.6 6.4a4.4 4.4 0 0 1 8.8 0Zm2.05-1.9a.55.55 0 1 0 1.1 0a.55.55 0 1 0-1.1 0Zm3.6 0a.55.55 0 1 0 1.1 0a.55.55 0 1 0-1.1 0Z"></path><path d="M2.6 7h8.8v4.8a1 1 0 0 1-1 1H3.6a1 1 0 0 1-1-1Z"></path><rect x="0.6" y="7" width="1.4" height="4.4" rx="0.7"></rect><rect x="12" y="7" width="1.4" height="4.4" rx="0.7"></rect><rect x="4.4" y="12" width="1.5" height="3.4" rx="0.75"></rect><rect x="8.1" y="12" width="1.5" height="3.4" rx="0.75"></rect></svg></a>
             </span>
           </li>
           <li class="work">
             <a class="work-main" href="https://screwdiscord.bytebrew.xyz"><span class="work-name">20 MB Video</span><span class="work-desc">Compress videos for Discord, right on your device</span></a>
             <span class="work-links">
-              <a href="https://screwdiscord.bytebrew.xyz" title="Open in browser"><span><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><circle cx="6" cy="6" r="5.5"></circle><path d="M0.5 6h11M6 0.5c1.6 1.6 2.4 3.4 2.4 5.5S7.6 9.9 6 11.5M6 0.5C4.4 2.1 3.6 3.9 3.6 6s0.8 3.9 2.4 5.5"></path></svg>Web</span></a>
+              <a href="https://screwdiscord.bytebrew.xyz" class="p-web" title="Open on the web" aria-label="Open on the web"><svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="0.9" aria-hidden="true"><circle cx="6" cy="6" r="5.5"></circle><path d="M0.5 6h11M6 0.5c1.6 1.6 2.4 3.4 2.4 5.5S7.6 9.9 6 11.5M6 0.5C4.4 2.1 3.6 3.9 3.6 6s0.8 3.9 2.4 5.5"></path></svg></a>
             </span>
           </li>
         </ul>
